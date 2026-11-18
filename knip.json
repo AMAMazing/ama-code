@@ -1,0 +1,10 @@
+{
+	"entry": [
+		"src/extension.ts",
+		"src/generated/hosts/vscode/protobus-services.ts",
+		"src/generated/hosts/vscode/hostbridge-grpc-service-config.ts"
+	],
+	"project": ["src/**/*.ts"],
+	"ignore": ["out/**", "node_modules/**", "*.d.ts", "src/shared/**"],
+	"vite": true
+}

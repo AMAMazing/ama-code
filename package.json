@@ -1,0 +1,535 @@
+{
+	"name": "ama-code",
+	"displayName": "AMA Code",
+	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
+	"version": "3.89.2",
+	"icon": "assets/icons/icon.png",
+	"engines": {
+		"vscode": "^1.84.0"
+	},
+	"author": {
+		"name": "AMA Code"
+	},
+	"license": "Apache-2.0",
+	"publisher": "ama-code",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/AMAMazing/ama-code"
+	},
+	"homepage": "https://github.com/AMAMazing/ama-code",
+	"categories": [
+		"AI",
+		"Chat",
+		"Programming Languages",
+		"Education",
+		"Snippets",
+		"Testing"
+	],
+	"keywords": [
+		"ama-code",
+		"coding",
+		"agent",
+		"autonomous",
+		"openai",
+		"ai"
+	],
+	"activationEvents": [
+		"onLanguage",
+		"onUri",
+		"onStartupFinished"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"icons": {
+			"cline-icon": {
+				"description": "AMA Code",
+				"default": {
+					"fontPath": "assets/icons/cline-bot.woff",
+					"fontCharacter": "\\e900"
+				}
+			}
+		},
+		"walkthroughs": [
+			{
+				"id": "ClineWalkthrough",
+				"title": "Meet AMA Code, your new coding partner",
+				"description": "AMA Code codes like a developer because it thinks like one. Here are 5 ways to put it to work:",
+				"steps": [
+					{
+						"id": "welcome",
+						"title": "Start with a Goal, Not Just a Prompt",
+						"description": "Tell AMA Code what you want to achieve. It plans, asks, and then codes, like a true partner.",
+						"media": {
+							"markdown": "walkthrough/step1.md"
+						}
+					},
+					{
+						"id": "learn",
+						"title": "Let AMA Code Learn Your Codebase",
+						"description": "Point AMA Code to your project. It builds understanding to make smart, context-aware changes.",
+						"media": {
+							"markdown": "walkthrough/step2.md"
+						}
+					},
+					{
+						"id": "advanced-features",
+						"title": "Always Use the Best AI Models",
+						"description": "AMA Code empowers you with State-of-the-Art AI via OpenAI Compatible endpoints.",
+						"media": {
+							"markdown": "walkthrough/step3.md"
+						}
+					},
+					{
+						"id": "mcp",
+						"title": "Extend with Powerful Tools (MCP)",
+						"description": "Connect to databases, APIs, or discover new capabilities in the MCP Marketplace.",
+						"media": {
+							"markdown": "walkthrough/step4.md"
+						}
+					},
+					{
+						"id": "getting-started",
+						"title": "You're Always in Control",
+						"description": "Review AMA Code's plans and diffs. Approve changes before they happen. No surprises.",
+						"media": {
+							"markdown": "walkthrough/step5.md"
+						},
+						"content": {
+							"path": "walkthrough/step5.md"
+						}
+					}
+				]
+			}
+		],
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "ama-code-ActivityBar",
+					"title": "AMA Code",
+					"icon": "assets/icons/icon.svg"
+				}
+			]
+		},
+		"views": {
+			"ama-code-ActivityBar": [
+				{
+					"type": "webview",
+					"id": "ama-code.SidebarProvider",
+					"name": "",
+					"icon": "assets/icons/icon.svg"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "ama-code.plusButtonClicked",
+				"title": "New Task",
+				"icon": "$(add)"
+			},
+			{
+				"command": "ama-code.mcpButtonClicked",
+				"title": "MCP Servers",
+				"icon": "$(server)"
+			},
+			{
+				"command": "ama-code.historyButtonClicked",
+				"title": "History",
+				"icon": "$(history)"
+			},
+			{
+				"command": "ama-code.settingsButtonClicked",
+				"title": "Settings",
+				"icon": "$(settings-gear)"
+			},
+			{
+				"command": "cline.dev.createTestTasks",
+				"title": "Create Test Tasks",
+				"category": "AMA Code",
+				"when": "cline.isDevMode"
+			},
+			{
+				"command": "cline.dev.expireMcpOAuthTokens",
+				"title": "Expire MCP OAuth Tokens (for testing)",
+				"category": "AMA Code",
+				"when": "cline.isDevMode"
+			},
+			{
+				"command": "ama-code.addToChat",
+				"title": "Add to AMA Code",
+				"category": "AMA Code"
+			},
+			{
+				"command": "ama-code.addTerminalOutputToChat",
+				"title": "Add to AMA Code",
+				"category": "AMA Code"
+			},
+			{
+				"command": "ama-code.focusChatInput",
+				"title": "Jump to Chat Input",
+				"category": "AMA Code"
+			},
+			{
+				"command": "ama-code.generateGitCommitMessage",
+				"title": "Generate Commit Message with AMA Code",
+				"category": "AMA Code",
+				"icon": "$(cline-icon)"
+			},
+			{
+				"command": "ama-code.abortGitCommitMessage",
+				"title": "Generate Commit Message with AMA Code - Stop",
+				"category": "AMA Code",
+				"icon": "$(debug-stop)"
+			},
+			{
+				"command": "ama-code.explainCode",
+				"title": "Explain with AMA Code",
+				"category": "AMA Code"
+			},
+			{
+				"command": "ama-code.improveCode",
+				"title": "Improve with AMA Code",
+				"category": "AMA Code"
+			},
+			{
+				"command": "ama-code.jupyterGenerateCell",
+				"title": "Generate Jupyter Cell with AMA Code",
+				"category": "AMA Code",
+				"icon": "$(sparkle)"
+			},
+			{
+				"command": "ama-code.jupyterExplainCell",
+				"title": "Explain Jupyter Cell with AMA Code",
+				"category": "AMA Code",
+				"icon": "$(question)"
+			},
+			{
+				"command": "ama-code.jupyterImproveCell",
+				"title": "Improve Jupyter Cell with AMA Code",
+				"category": "AMA Code",
+				"icon": "$(lightbulb)"
+			},
+			{
+				"command": "ama-code.openWalkthrough",
+				"title": "Open Walkthrough",
+				"category": "AMA Code"
+			},
+			{
+				"command": "ama-code.reconstructTaskHistory",
+				"title": "Reconstruct Task History",
+				"category": "AMA Code"
+			},
+			{
+				"command": "cline.reviewComment.reply",
+				"title": "Reply",
+				"category": "AMA Code",
+				"enablement": "!commentIsEmpty"
+			},
+			{
+				"command": "cline.reviewComment.addToChat",
+				"title": "Add to AMA Code Chat",
+				"category": "AMA Code",
+				"icon": "$(link-external)"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "editor.action.submitComment",
+				"key": "enter",
+				"when": "commentEditorFocused && commentController == cline-ai-review && !commentIsEmpty"
+			},
+			{
+				"command": "ama-code.addToChat",
+				"key": "cmd+'",
+				"mac": "cmd+'",
+				"win": "ctrl+'",
+				"linux": "ctrl+'",
+				"when": "editorHasSelection"
+			},
+			{
+				"command": "ama-code.generateGitCommitMessage",
+				"when": "config.git.enabled && scmProvider == git"
+			},
+			{
+				"command": "ama-code.focusChatInput",
+				"key": "cmd+'",
+				"mac": "cmd+'",
+				"win": "ctrl+'",
+				"linux": "ctrl+'",
+				"when": "!editorHasSelection"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "ama-code.plusButtonClicked",
+					"group": "navigation@1",
+					"when": "view == ama-code.SidebarProvider"
+				},
+				{
+					"command": "ama-code.mcpButtonClicked",
+					"group": "navigation@2",
+					"when": "view == ama-code.SidebarProvider"
+				},
+				{
+					"command": "ama-code.historyButtonClicked",
+					"group": "navigation@3",
+					"when": "view == ama-code.SidebarProvider"
+				},
+				{
+					"command": "ama-code.settingsButtonClicked",
+					"group": "navigation@6",
+					"when": "view == ama-code.SidebarProvider"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "ama-code.addToChat",
+					"group": "navigation",
+					"when": "editorHasSelection"
+				}
+			],
+			"terminal/context": [
+				{
+					"command": "ama-code.addTerminalOutputToChat",
+					"group": "navigation"
+				}
+			],
+			"scm/title": [
+				{
+					"command": "ama-code.generateGitCommitMessage",
+					"group": "navigation",
+					"when": "config.git.enabled && scmProvider == git && !cline.isGeneratingCommit"
+				},
+				{
+					"command": "ama-code.abortGitCommitMessage",
+					"group": "navigation",
+					"when": "config.git.enabled && scmProvider == git && cline.isGeneratingCommit"
+				}
+			],
+			"notebook/toolbar": [
+				{
+					"command": "ama-code.jupyterGenerateCell",
+					"group": "navigation/add@1",
+					"when": "notebookType == 'jupyter-notebook'"
+				}
+			],
+			"notebook/cell/title": [
+				{
+					"command": "ama-code.jupyterExplainCell",
+					"group": "inline@1",
+					"when": "notebookType == 'jupyter-notebook'"
+				},
+				{
+					"command": "ama-code.jupyterImproveCell",
+					"group": "inline@2",
+					"when": "notebookType == 'jupyter-notebook'"
+				}
+			],
+			"commandPalette": [
+				{
+					"command": "ama-code.generateGitCommitMessage",
+					"when": "config.git.enabled && !cline.isGeneratingCommit"
+				},
+				{
+					"command": "ama-code.abortGitCommitMessage",
+					"when": "config.git.enabled && cline.isGeneratingCommit"
+				},
+				{
+					"command": "cline.reviewComment.reply",
+					"when": "false"
+				}
+			],
+			"comments/commentThread/context": [
+				{
+					"command": "cline.reviewComment.reply",
+					"group": "inline",
+					"when": "commentController == cline-ai-review"
+				}
+			],
+			"comments/commentThread/title": [
+				{
+					"command": "cline.reviewComment.addToChat",
+					"group": "inline",
+					"when": "commentController == cline-ai-review"
+				}
+			]
+		},
+		"configuration": {
+			"title": "AMA Code",
+			"properties": {}
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run package",
+		"compile": "npm run check-types && npm run lint && node esbuild.mjs",
+		"dev": "npm run protos && npm run watch",
+		"watch": "npx npm-run-all -p watch:*",
+		"watch:esbuild": "node esbuild.mjs --watch",
+		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+		"package": "npm run check-types && npm run build:webview && npm run lint && node esbuild.mjs --production",
+		"protos": "node scripts/build-proto.mjs",
+		"download-ripgrep": "node scripts/download-ripgrep.mjs",
+		"postprotos": "biome format --config-path ./biome.jsonc src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched",
+		"clean:build": "rimraf dist dist-standalone webview-ui/build src/generated out/",
+		"clean:deps": "rimraf node_modules webview-ui/node_modules",
+		"clean:all": "npm run clean:build && npm run clean:deps",
+		"check-types": "npm run protos && tsc --noEmit && cd webview-ui && tsc --noEmit",
+		"lint": "biome lint --config-path ./biome.jsonc --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && npm run lint:proto",
+		"lint:proto": "bash ./scripts/proto-lint.sh",
+		"format": "biome format --config-path ./biome.jsonc --changed --since main --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error",
+		"format:fix": "biome check --config-path ./biome.jsonc --changed --since main --no-errors-on-unmatched --files-ignore-unknown=true --write",
+		"fix:all": "biome check --config-path ./biome.jsonc --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe",
+		"install:all": "npm install && cd webview-ui && npm install",
+		"dev:webview": "cd webview-ui && npm run dev",
+		"build:webview": "cd webview-ui && npm run build",
+		"publish:marketplace": "node scripts/publish-marketplace.mjs",
+		"publish:marketplace:prerelease": "node scripts/publish-marketplace.mjs --pre-release",
+		"prepare": "npx husky"
+	},
+	"lint-staged": {
+		"src/shared/storage/state-keys.ts": [
+			"node scripts/generate-state-proto.mjs",
+			"git add proto/cline/state.proto"
+		],
+		"*": [
+			"biome check --write --staged --no-errors-on-unmatched --files-ignore-unknown=true"
+		]
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.3.14",
+		"@bufbuild/buf": "^1.54.0",
+		"@types/better-sqlite3": "^7.6.13",
+		"@types/clone-deep": "^4.0.4",
+		"@types/get-folder-size": "^3.0.4",
+		"@types/js-yaml": "^4.0.9",
+		"@types/node": "20.x",
+		"@types/pdf-parse": "^1.1.4",
+		"@types/picomatch": "^4.0.2",
+		"@types/shell-quote": "^1.7.5",
+		"@types/turndown": "^5.0.5",
+		"@types/vscode": "1.84.0",
+		"@vscode/vsce": "^3.6.0",
+		"chalk": "5.6.2",
+		"cross-env": "^10.1.0",
+		"dotenv": "^17.2.3",
+		"esbuild": "^0.25.0",
+		"grpc-tools": "^1.13.0",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.1.0",
+		"minimatch": "^3.0.3",
+		"npm-run-all": "^4.1.5",
+		"prebuild-install": "^7.1.3",
+		"protoc-gen-ts": "^0.8.7",
+		"rimraf": "^6.0.1",
+		"tree-kill": "^1.2.2",
+		"ts-node": "^10.9.2",
+		"ts-proto": "^2.6.1",
+		"tsconfig-paths": "^4.2.0",
+		"typescript": "^5.4.5"
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "^0.50.4",
+		"@anthropic-ai/vertex-sdk": "^0.11.5",
+		"@aws-sdk/client-bedrock-runtime": "^3.922.0",
+		"@aws-sdk/credential-providers": "^3.922.0",
+		"@azure/identity": "^4.13.0",
+		"@bufbuild/protobuf": "^2.2.5",
+		"@cerebras/cerebras_cloud_sdk": "^1.35.0",
+		"@google-cloud/vertexai": "^1.9.3",
+		"@google/genai": "^1.30.0",
+		"@grpc/grpc-js": "^1.9.15",
+		"@grpc/reflection": "^1.0.4",
+		"@mistralai/mistralai": "^1.5.0",
+		"@modelcontextprotocol/sdk": "^1.25.1",
+		"@opentelemetry/api": "^1.9.0",
+		"@opentelemetry/core": "^2.1.0",
+		"@opentelemetry/exporter-logs-otlp-grpc": "^0.56.0",
+		"@opentelemetry/exporter-logs-otlp-http": "^0.56.0",
+		"@opentelemetry/exporter-logs-otlp-proto": "^0.56.0",
+		"@opentelemetry/exporter-metrics-otlp-grpc": "^0.56.0",
+		"@opentelemetry/exporter-metrics-otlp-http": "^0.56.0",
+		"@opentelemetry/exporter-metrics-otlp-proto": "^0.56.0",
+		"@opentelemetry/exporter-prometheus": "^0.56.0",
+		"@opentelemetry/exporter-trace-otlp-http": "^0.56.0",
+		"@opentelemetry/instrumentation": "^0.205.0",
+		"@opentelemetry/instrumentation-http": "^0.205.0",
+		"@opentelemetry/resources": "^1.30.1",
+		"@opentelemetry/sdk-logs": "^0.56.0",
+		"@opentelemetry/sdk-metrics": "^1.30.1",
+		"@opentelemetry/sdk-node": "^0.56.0",
+		"@opentelemetry/sdk-trace-base": "^2.1.0",
+		"@opentelemetry/sdk-trace-node": "^1.30.1",
+		"@opentelemetry/semantic-conventions": "^1.37.0",
+		"@sap-ai-sdk/ai-api": "^2.7.0",
+		"@sap-ai-sdk/orchestration": "^2.7.0",
+		"@sap-cloud-sdk/connectivity": "^4.6.0",
+		"@streamparser/json": "^0.0.22",
+		"@tailwindcss/vite": "^4.1.14",
+		"@types/uuid": "^10.0.0",
+		"@vscode/codicons": "^0.0.36",
+		"archiver": "^7.0.1",
+		"aws4fetch": "^1.0.20",
+		"axios": "1.16.1",
+		"better-sqlite3": "^12.4.1",
+		"cheerio": "^1.0.0",
+		"chokidar": "^4.0.1",
+		"chrome-launcher": "^1.1.2",
+		"clone-deep": "^4.0.1",
+		"default-shell": "^2.2.0",
+		"diff": "8.0.4",
+		"exceljs": "^4.4.0",
+		"execa": "^9.5.2",
+		"fast-deep-equal": "^3.1.3",
+		"fzf": "^0.5.2",
+		"get-folder-size": "^5.0.0",
+		"globby": "^14.0.2",
+		"grpc-health-check": "^2.0.2",
+		"iconv-lite": "^0.6.3",
+		"ignore": "^7.0.3",
+		"image-size": "^2.0.2",
+		"isbinaryfile": "^5.0.2",
+		"jschardet": "^3.1.4",
+		"json5": "^2.2.3",
+		"mammoth": "^1.11.0",
+		"nanoid": "^5.1.6",
+		"nice-grpc": "^2.1.12",
+		"node-machine-id": "^1.1.12",
+		"ollama": "^0.5.13",
+		"open": "^10.1.2",
+		"open-graph-scraper": "^6.9.0",
+		"openai": "^6.21.0",
+		"os-name": "^6.0.0",
+		"p-mutex": "^1.0.0",
+		"p-timeout": "^6.1.4",
+		"p-wait-for": "^5.0.2",
+		"pdf-parse": "^1.1.1",
+		"picomatch": "^4.0.3",
+		"posthog-node": "^5.8.0",
+		"puppeteer-chromium-resolver": "^23.0.0",
+		"puppeteer-core": "^23.4.0",
+		"reconnecting-eventsource": "^1.6.4",
+		"serialize-error": "^11.0.3",
+		"shell-quote": "^1.8.3",
+		"simple-git": "3.36.0",
+		"strip-ansi": "^7.1.2",
+		"tailwindcss": "^4.1.14",
+		"tree-sitter-wasms": "^0.1.11",
+		"ts-morph": "^25.0.1",
+		"turndown": "^7.2.0",
+		"ulid": "^2.4.0",
+		"undici": "^7.26.0",
+		"uuid": "^11.1.0",
+		"vscode-uri": "^3.1.0",
+		"web-tree-sitter": "^0.22.6",
+		"zod": "^3.24.2"
+	},
+	"overrides": {
+		"tar-fs": ">=3.1.1",
+		"tar": "^7.5.2",
+		"vite": "^7.1.11",
+		"js-yaml": "^4.1.1",
+		"serialize-javascript": ">=7.0.3",
+		"protobufjs": "7.5.8",
+		"diff": "8.0.4"
+	}
+}
