@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import chalk from "chalk"
-import { execFileSync, execSync, spawnSync } from "child_process"
+import { execFileSync, execSync, spawn } from "child_process"
 import fsSync from "fs"
 import * as fs from "fs/promises"
 import { globby } from "globby"
@@ -110,11 +110,16 @@ async function compileProtos() {
 	} else {
 		console.log(chalk.yellow("Using buf + ts-proto generator fallback..."))
 		await buildDescriptorSetWithBuf(descriptorFile)
-		await tsProtocNodeFallback(TS_OUT_DIR, descriptorFile, relativeProtoFiles, TS_PROTO_OPTIONS)
-		await tsProtocNodeFallback(GRPC_JS_OUT_DIR, descriptorFile, relativeProtoFiles, ["outputServices=grpc-js", ...TS_PROTO_OPTIONS])
-		await tsProtocNodeFallback(NICE_JS_OUT_DIR, descriptorFile, relativeProtoFiles, [
-			"outputServices=nice-grpc,useExactTypes=false",
-			...TS_PROTO_OPTIONS,
+		const { FileDescriptorSet } = require("ts-proto-descriptors")
+		const descBytes = await fs.readFile(descriptorFile)
+		const decodedSet = FileDescriptorSet.decode(descBytes)
+		await Promise.all([
+			tsProtocNodeFallback(TS_OUT_DIR, decodedSet, relativeProtoFiles, TS_PROTO_OPTIONS),
+			tsProtocNodeFallback(GRPC_JS_OUT_DIR, decodedSet, relativeProtoFiles, ["outputServices=grpc-js", ...TS_PROTO_OPTIONS]),
+			tsProtocNodeFallback(NICE_JS_OUT_DIR, decodedSet, relativeProtoFiles, [
+				"outputServices=nice-grpc,useExactTypes=false",
+				...TS_PROTO_OPTIONS,
+			]),
 		])
 	}
 
@@ -131,10 +136,8 @@ async function buildDescriptorSetWithBuf(descriptorFile) {
 	await fs.copyFile(descriptorFile, REPO_DESCRIPTOR_FILE)
 }
 
-async function tsProtocNodeFallback(outDir, descriptorFile, relativeProtoFiles, protoOptions) {
-	const { FileDescriptorSet, CodeGeneratorRequest, CodeGeneratorResponse } = require("ts-proto-descriptors")
-	const descBytes = await fs.readFile(descriptorFile)
-	const decodedSet = FileDescriptorSet.decode(descBytes)
+async function tsProtocNodeFallback(outDir, decodedSet, relativeProtoFiles, protoOptions) {
+	const { CodeGeneratorRequest, CodeGeneratorResponse } = require("ts-proto-descriptors")
 
 	const reqBuffer = Buffer.from(
 		CodeGeneratorRequest.encode({
@@ -146,27 +149,34 @@ async function tsProtocNodeFallback(outDir, descriptorFile, relativeProtoFiles, 
 		}).finish(),
 	)
 
-	const res = spawnSync(process.execPath, [TS_PROTO_SCRIPT], {
-		input: reqBuffer,
-		maxBuffer: 50 * 1024 * 1024,
+	const stdout = await new Promise((resolve, reject) => {
+		const child = spawn(process.execPath, [TS_PROTO_SCRIPT], {
+			stdio: ["pipe", "pipe", "pipe"],
+		})
+		const stdoutChunks = []
+		const stderrChunks = []
+		child.stdout.on("data", (chunk) => stdoutChunks.push(chunk))
+		child.stderr.on("data", (chunk) => stderrChunks.push(chunk))
+		child.on("error", reject)
+		child.on("close", (code) => {
+			if (code !== 0) {
+				console.error(chalk.red("ts-proto plugin failed:"), Buffer.concat(stderrChunks).toString())
+				process.exit(1)
+			}
+			resolve(Buffer.concat(stdoutChunks))
+		})
+		child.stdin.end(reqBuffer)
 	})
 
-	if (res.status !== 0) {
-		console.error(chalk.red("ts-proto plugin failed:"), res.stderr?.toString())
-		process.exit(1)
-	}
-
-	const response = CodeGeneratorResponse.decode(res.stdout)
+	const response = CodeGeneratorResponse.decode(stdout)
 	if (response.error) {
 		console.error(chalk.red("ts-proto response error:"), response.error)
 		process.exit(1)
 	}
 
-	for (const file of response.file) {
-		const targetPath = path.join(outDir, file.name)
-		await fs.mkdir(path.dirname(targetPath), { recursive: true })
-		await fs.writeFile(targetPath, file.content, "utf8")
-	}
+	const dirs = new Set(response.file.map((file) => path.dirname(path.join(outDir, file.name))))
+	await Promise.all([...dirs].map((dir) => fs.mkdir(dir, { recursive: true })))
+	await Promise.all(response.file.map((file) => fs.writeFile(path.join(outDir, file.name), file.content, "utf8")))
 }
 
 function tsProtoc(outDir, protoFiles, protoOptions) {

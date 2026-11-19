@@ -10,6 +10,17 @@ const production = process.argv.includes("--production") || process.env["IS_DEBU
 const watch = process.argv.includes("--watch")
 const destDir = "dist"
 
+const copyFileIfChanged = (src, dest) => {
+	if (fs.existsSync(dest)) {
+		const srcStat = fs.statSync(src)
+		const destStat = fs.statSync(dest)
+		if (srcStat.size === destStat.size) {
+			return
+		}
+	}
+	fs.copyFileSync(src, dest)
+}
+
 /**
  * @type {import('esbuild').Plugin}
  */
@@ -90,9 +101,10 @@ const copyWasmFiles = {
 			// tree sitter
 			const sourceDir = path.join(__dirname, "node_modules", "web-tree-sitter")
 			const targetDir = path.join(__dirname, destDir)
+			fs.mkdirSync(targetDir, { recursive: true })
 
 			// Copy tree-sitter.wasm
-			fs.copyFileSync(path.join(sourceDir, "tree-sitter.wasm"), path.join(targetDir, "tree-sitter.wasm"))
+			copyFileIfChanged(path.join(sourceDir, "tree-sitter.wasm"), path.join(targetDir, "tree-sitter.wasm"))
 
 			// Copy language-specific WASM files
 			const languageWasmDir = path.join(__dirname, "node_modules", "tree-sitter-wasms", "out")
@@ -115,7 +127,7 @@ const copyWasmFiles = {
 
 			languages.forEach((lang) => {
 				const filename = `tree-sitter-${lang}.wasm`
-				fs.copyFileSync(path.join(languageWasmDir, filename), path.join(targetDir, filename))
+				copyFileIfChanged(path.join(languageWasmDir, filename), path.join(targetDir, filename))
 			})
 		})
 	},

@@ -6,7 +6,6 @@ import {
 	CheckCheck,
 	FlaskConical,
 	HardDriveDownload,
-	Info,
 	type LucideIcon,
 	SlidersHorizontal,
 	SquareMousePointer,
@@ -28,7 +27,6 @@ import { isAdminOrOwner } from "../account/helpers";
 import { Tab, TabContent, TabList, TabTrigger } from "../common/Tab";
 import ViewHeader from "../common/ViewHeader";
 import SectionHeader from "./SectionHeader";
-import AboutSection from "./sections/AboutSection";
 import ApiConfigurationSection from "./sections/ApiConfigurationSection";
 import BrowserSettingsSection from "./sections/BrowserSettingsSection";
 import DebugSection from "./sections/DebugSection";
@@ -46,7 +44,6 @@ type SettingsTabID =
 	| "browser"
 	| "terminal"
 	| "general"
-	| "about"
 	| "debug"
 	| "remote-config";
 interface SettingsTab {
@@ -107,13 +104,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
 			{ activeOrganization } = { user: null, activeOrganization: null },
 		) => !activeOrganization || !isAdminOrOwner(activeOrganization),
 	},
-	{
-		id: "about",
-		name: "About",
-		tooltipText: "About Cline",
-		headerText: "About",
-		icon: Info,
-	},
 	// Only show in dev mode
 	{
 		id: "debug",
@@ -158,7 +148,6 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			browser: BrowserSettingsSection,
 			terminal: TerminalSettingsSection,
 			"remote-config": RemoteConfigSection,
-			about: AboutSection,
 			debug: DebugSection,
 		}),
 		[],
@@ -276,8 +265,6 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 		const props: any = { renderSectionHeader };
 		if (activeTab === "debug") {
 			props.onResetState = handleResetState;
-		} else if (activeTab === "about") {
-			props.version = version;
 		} else if (activeTab === "api-config") {
 			props.initialModelTab = settingsInitialModelTab;
 		}

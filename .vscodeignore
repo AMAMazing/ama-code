@@ -10,12 +10,16 @@ tsconfig*.json
 **/*.map
 **/*.ts
 .env
+.env.example
 .nvmrc
 .gitattributes
 buf.yaml
 biome.jsonc
 knip.json
 goal.md
+proto/**
+scripts/**
+*.vsix
 
 # Ignore all webview-ui files except the build directory
 webview-ui/src/**
