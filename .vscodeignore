@@ -4,6 +4,7 @@ out/**
 dist-standalone/**
 node_modules/**
 src/**
+ambientlanguage/**
 .gitignore
 esbuild.mjs
 tsconfig*.json
@@ -20,6 +21,8 @@ goal.md
 proto/**
 scripts/**
 *.vsix
+README.marketplace.md
+.README.publish-backup.md
 
 # Ignore all webview-ui files except the build directory
 webview-ui/src/**

@@ -45,12 +45,21 @@ let st = AmbientSync.loadInitial({
   updatedAt: Date.now()
 });
 
-st.flaws = st.flaws || {};
-
-if ((st.emoTurn > 0 || (st.emoUnlocked && st.emoUnlocked.length > 0)) && st.i < TUT_DECK.length) {
-  st.i = TUT_DECK.length;
+function sanitizeRuntimeState(state) {
+  state.flaws = state.flaws && typeof state.flaws === 'object' ? state.flaws : {};
+  state.charLastSeen = state.charLastSeen && typeof state.charLastSeen === 'object' ? state.charLastSeen : {};
+  state.i = Number.isFinite(state.i) && state.i >= 0 ? Math.floor(state.i) : 0;
+  state.n = Number.isFinite(state.n) && state.n >= 0 ? Math.floor(state.n) : 0;
+  state.emoTurn = Number.isFinite(state.emoTurn) && state.emoTurn >= 0 ? Math.floor(state.emoTurn) : 0;
+  state.lastFlawTurn = Number.isFinite(state.lastFlawTurn) && state.lastFlawTurn >= -1 ? Math.floor(state.lastFlawTurn) : -1;
+  state.emoUnlocked = Array.isArray(state.emoUnlocked) ? state.emoUnlocked : [];
+  state.emoKnown = Array.isArray(state.emoKnown) && state.emoKnown.length ? state.emoKnown : ['ม', 'า', 'น', 'ก', 'ี'];
+  if ((state.emoTurn > 0 || state.emoUnlocked.length > 0) && state.i < TUT_DECK.length) {
+    state.i = TUT_DECK.length;
+  }
 }
 
+sanitizeRuntimeState(st);
 window.AMBIENT_PHONETICS_MODE = st.phoneticsMode || 'real';
 
 const unlockedSet = new Set(st.emoUnlocked);
@@ -80,14 +89,11 @@ AmbientSync.subscribe(
   () => st,
   merged => {
     st = merged;
-    st.flaws = st.flaws || {};
-    if ((st.emoTurn > 0 || (st.emoUnlocked && st.emoUnlocked.length > 0)) && st.i < TUT_DECK.length) {
-      st.i = TUT_DECK.length;
-    }
+    sanitizeRuntimeState(st);
     unlockedSet.clear();
-    (st.emoUnlocked || []).forEach(id => unlockedSet.add(id));
+    st.emoUnlocked.forEach(id => unlockedSet.add(id));
     emoKnownSet.clear();
-    (st.emoKnown || []).forEach(c => emoKnownSet.add(c));
+    st.emoKnown.forEach(c => emoKnownSet.add(c));
     if (!inTutorial()) seedTutorialGlyphs();
     window.AMBIENT_PHONETICS_MODE = st.phoneticsMode;
     syncSoundUI();
@@ -142,7 +148,7 @@ function diagnoseAttempt(th, targetRom, guess) {
   // 1. Visual Lookalike Twin Confusion
   for (const initChar of feat.initials) {
     const twins = LOOKALIKE_TWINS[initChar];
-    if (!twins) continue;
+    if (!twins || !U[initChar]) continue;
     const trueSnd = U[initChar][0];
     if (trueSnd && !g.startsWith(trueSnd)) {
       for (const [twinChar, hook] of twins) {
@@ -158,7 +164,7 @@ function diagnoseAttempt(th, targetRom, guess) {
   // 2. Positional Final Consonant Sound Shifts (-n, -t, -p, -k)
   if (st.phoneticsMode !== 'literal') {
     for (const [finChar, shiftedSnd] of feat.finals.entries()) {
-      const initSnd = U[finChar][0];
+      const initSnd = U[finChar] && U[finChar][0];
       if (initSnd && g.endsWith(initSnd) && !targetRom.endsWith(initSnd)) {
         events.push({
           key: `final:${finChar}`,
@@ -170,7 +176,7 @@ function diagnoseAttempt(th, targetRom, guess) {
 
     // 3. Pre-posed Vowel Order (typing เ/แ/โ/ไ/ใ before the consonant)
     for (const pv of feat.preVowels) {
-      const pvSnd = U[pv][0];
+      const pvSnd = U[pv] && U[pv][0];
       if (pvSnd && g.startsWith(pvSnd) && !targetRom.startsWith(pvSnd)) {
         events.push({
           key: `pre:${pv}`,
@@ -235,7 +241,7 @@ function pickFlawAwareEmojiStep() {
 
       if (flawKey.startsWith('twin:')) {
         const [c1, c2] = flawKey.slice(5).split('|');
-        if (U[c1] && U[c2]) {
+        if (c1 && c2 && U[c1] && U[c2] && U[c1][0] && U[c2][0]) {
           const twinInfo = (LOOKALIKE_TWINS[c1] || []).find(t => t[0] === c2) ||
                            (LOOKALIKE_TWINS[c2] || []).find(t => t[0] === c1);
           const hook = twinInfo ? twinInfo[1] : `${disp(c1)} (${U[c1][0]}) vs ${disp(c2)} (${U[c2][0]})`;
@@ -252,7 +258,7 @@ function pickFlawAwareEmojiStep() {
       if (flawKey.startsWith('final:')) {
         const ch = flawKey.slice(6);
         const shifted = FINAL_SOUND[ch];
-        if (U[ch] && shifted) {
+        if (ch && U[ch] && shifted) {
           return ['f', ch, shifted, {
             flawKey,
             badge: `🎯 Flaw Buster · End-of-Syllable ${ch}`,
@@ -263,7 +269,7 @@ function pickFlawAwareEmojiStep() {
 
       if (flawKey.startsWith('char:')) {
         const ch = flawKey.slice(5);
-        if (U[ch] && U[ch][0]) {
+        if (ch && U[ch] && U[ch][0]) {
           const tw = LOOKALIKE_TWINS[ch] && LOOKALIKE_TWINS[ch][0];
           return ['f', ch, U[ch][0], {
             flawKey,
@@ -309,9 +315,10 @@ function pickFlawAwareEmojiStep() {
     }
   }
 
-  if (!best) best = EMOJI_DB[st.emoTurn % EMOJI_DB.length];
+  if (!best) best = EMOJI_DB[Math.abs(st.emoTurn) % EMOJI_DB.length] || EMOJI_DB[0];
 
   for (const c of best.th) {
+    if (!U[c]) continue;
     if (!emoKnownSet.has(c)) {
       emoKnownSet.add(c);
       st.charLastSeen[c] = st.emoTurn;
@@ -321,30 +328,36 @@ function pickFlawAwareEmojiStep() {
   }
 
   for (const c of best.th) st.charLastSeen[c] = st.emoTurn;
-  return ['w', best.th, targetRom(best), best.en, best, false];
+  const rom = targetRom(best) || romanizeThai(best.th, st.phoneticsMode) || 'thai';
+  return ['w', best.th, rom, best.en, best, false];
 }
 
 function getStep() {
   if (inTutorial()) {
     const raw = TUT_DECK[st.i];
-    if (raw[0] === 'i') {
-      emoKnownSet.add(raw[1]);
-      return raw;
+    if (raw) {
+      if (raw[0] === 'i') {
+        emoKnownSet.add(raw[1]);
+        return raw;
+      }
+      const rom = romanizeThai(raw[1], st.phoneticsMode);
+      return ['w', raw[1], rom, raw[3], raw[4] || null, false];
     }
-    const rom = romanizeThai(raw[1], st.phoneticsMode);
-    return ['w', raw[1], rom, raw[3], raw[4] || null, false];
+    st.i = TUT_DECK.length;
   }
   return pickFlawAwareEmojiStep();
 }
 
 // ---------- Upgraded Audio Synth & Spoken Thai TTS ----------
-let ac;
+let ac = null;
 let thVoice = null;
 
 function initVoices() {
   if (typeof speechSynthesis === 'undefined') return;
-  const voices = speechSynthesis.getVoices();
-  thVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('th')) || null;
+  try {
+    const voices = speechSynthesis.getVoices();
+    thVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('th')) || null;
+  } catch (e) {}
 }
 if (typeof speechSynthesis !== 'undefined') {
   initVoices();
@@ -354,15 +367,37 @@ if (typeof speechSynthesis !== 'undefined') {
 }
 
 function getAudioContext() {
-  ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-  if (ac.state === 'suspended') ac.resume().catch(() => {});
-  return ac;
+  try {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    if (ac && ac.state === 'closed') ac = null;
+    ac = ac || new Ctor();
+    if (ac.state === 'suspended') ac.resume().catch(() => {});
+    return ac;
+  } catch (e) {
+    return null;
+  }
 }
+
+function closeAudioResources() {
+  try {
+    if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+  } catch (e) {}
+  try {
+    if (ac && ac.state !== 'closed' && typeof ac.close === 'function') {
+      ac.close().catch(() => {});
+    }
+  } catch (e) {}
+  ac = null;
+}
+window.addEventListener('pagehide', closeAudioResources);
+window.addEventListener('beforeunload', closeAudioResources);
 
 function playNote(freq, duration, vol = 0.07, delay = 0, type = 'triangle') {
   if (st.snd === 'off') return;
   try {
     const ctx = getAudioContext();
+    if (!ctx) return;
     const start = ctx.currentTime + delay;
 
     const osc = ctx.createOscillator();
@@ -425,6 +460,7 @@ const tick = () => {
   if (st.snd === 'off') return;
   try {
     const ctx = getAudioContext();
+    if (!ctx) return;
     const s = ctx.currentTime;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -446,14 +482,22 @@ const soft = () => {
 };
 
 // ---------- Game Loop & Trophy UI ----------
-let cur, buf, rows, misses, solved, hint, keyst, locked, lastFlawTip = '', feed = [];
+let cur, buf = '', rows = [], misses = 0, solved = false, hint = false, keyst = {}, locked = false, lastFlawTip = '', feed = [];
+let nextTimer = null;
 let viewMode = 'play';
 let trFilter = 'all', trQuery = '', trLimit = 180, selectedTrophy = EMOJI_DB[0];
 
 const FONTS = {
-  modern: '"Noto Sans Thai","Sarabun",sans-serif',
-  looped: '"Noto Sans Thai Looped","Noto Sans Thai",sans-serif'
+  modern: '"Noto Sans Thai","Leelawadee UI","Thonburi","Sarabun",sans-serif',
+  looped: '"Noto Sans Thai Looped","Noto Sans Thai","Leelawadee UI","Thonburi",sans-serif'
 };
+
+function clearPendingNext() {
+  if (nextTimer !== null) {
+    clearTimeout(nextTimer);
+    nextTimer = null;
+  }
+}
 
 function applyTurnFont() {
   const activeFont = st.f === 'mix'
@@ -475,8 +519,13 @@ function updateHeaderCounts() {
 }
 
 function render() {
+  clearPendingNext();
   applyTurnFont();
-  cur = getStep();
+  try {
+    cur = getStep();
+  } catch (e) {
+    cur = ['i', 'ม', false, null];
+  }
   buf = ''; rows = []; misses = 0; solved = false; hint = false; keyst = {}; locked = false; lastFlawTip = '';
   draw();
 }
@@ -500,71 +549,95 @@ function draw(extra) {
   updateHeaderCounts();
   const el = document.getElementById('stage');
   const kb = document.getElementById('kb');
+  if (!el || !kb) return;
 
   if (viewMode === 'trophy') {
     el.className = 'trophy-mode';
     kb.style.display = 'none';
-    drawTrophyStage(el);
-    return;
+    try {
+      drawTrophyStage(el);
+      return;
+    } catch (e) {
+      viewMode = 'play';
+      const tb = document.getElementById('trophbtn');
+      if (tb) tb.classList.remove('on');
+    }
+  }
+
+  if (!cur) {
+    try {
+      cur = getStep();
+    } catch (e) {
+      cur = ['i', 'ม', false, null];
+    }
   }
 
   kb.style.display = 'flex';
   let h = '';
-  if (cur[0] === 'i') {
-    const c = cur[1], upcomingEmo = cur[3];
-    const showLearnClue = st.clueMode === 'learn' && upcomingEmo;
-    const badge = showLearnClue
-      ? `<span class="badge">new glyph for ${upcomingEmo.emo} “${upcomingEmo.en}”</span>`
-      : upcomingEmo
-        ? `<span class="badge">new glyph for next mystery emoji (${upcomingEmo.th.length} chars)</span>`
-        : inTutorial()
-          ? `<span class="badge">tutorial ${st.i + 1}/${TUT_DECK.length} · new character</span>`
-          : `<span class="badge">new character</span>`;
-    h = `${badge}<div class="th glyph">${disp(c)}</div><p class="hook">${U[c][1]}</p><div class="buf">${buf || '_'}</div>`;
-  } else if (cur[0] === 'f') {
-    const [, c, , meta] = cur;
-    h = `<span class="badge rev">${meta.badge}</span><div class="th glyph">${disp(c)}</div><p class="hook">${meta.hook}</p><div class="buf">${buf || '_'}</div>`;
-  } else {
-    const [, th, rom, mean, emoObj] = cur;
-    const shown = rows.slice(-3);
-    let g = '';
-    for (const r of shown) {
-      g += `<div class="gr">${[...r.g].map((ch, i) => `<div class="t ${r.r[i]}">${ch}</div>`).join('')}</div>`;
-    }
-    if (!solved) {
-      g += `<div class="gr">${[...rom].map((_, i) => `<div class="t ${buf[i] ? 'f' : ''}">${buf[i] || ''}</div>`).join('')}</div>`;
-    }
-
-    let topBadge = '';
-    if (solved && emoObj) {
-      topBadge = `<div class="emo-reveal"><div class="emo-hero">${emoObj.emo}</div><span class="emo-tag">🏆 Unlocked!</span></div>`;
-    } else if (st.clueMode === 'learn' && emoObj) {
-      topBadge = `<div class="emo-reveal"><div class="emo-hero">${emoObj.emo}</div><span class="badge">💡 ${mean}</span></div>`;
-    } else if (emoObj) {
-      topBadge = `<span class="badge">mystery emoji · ${th.length} Thai chars</span>`;
-    } else if (inTutorial()) {
-      topBadge = `<span class="badge">tutorial ${st.i + 1}/${TUT_DECK.length}</span>`;
-    }
-
-    let line;
-    if (solved) {
-      const tipSuffix = lastFlawTip ? ` · <span class="rule-pill">🎯 ${lastFlawTip}</span>` : '';
-      line = `<p class="hint ok">${emoObj ? emoObj.emo + ' ' : ''}${th} (${rom}) = “${mean}” <button id="spkbtn" class="spk-inline" title="Listen to pronunciation">🔊</button>${tipSuffix}</p>`;
-    } else if (hint) {
-      if (st.phoneticsMode === 'literal') {
-        line = `<p class="hint">${[...th].map(c => disp(c) + ' ' + (U[c][0] || 'silent')).join(' · ')}</p>`;
-      } else {
-        line = explainRealThai(th);
-      }
-    } else if (lastFlawTip) {
-      line = `<p class="hint"><span class="rule-pill">🎯 ${lastFlawTip}</span></p>`;
-    } else if (st.clueMode === 'learn') {
-      line = `<p class="hint">💡 “${mean}” · Sound out the Thai script (${st.phoneticsMode === 'real' ? 'Real Thai syllables' : 'Literal 1:1'}).</p>`;
+  try {
+    if (cur[0] === 'i') {
+      const c = cur[1], upcomingEmo = cur[3];
+      const info = U[c] || ['', 'Thai character'];
+      const showLearnClue = st.clueMode === 'learn' && upcomingEmo;
+      const badge = showLearnClue
+        ? `<span class="badge">new glyph for ${upcomingEmo.emo} “${upcomingEmo.en}”</span>`
+        : upcomingEmo
+          ? `<span class="badge">new glyph for next mystery emoji (${upcomingEmo.th.length} chars)</span>`
+          : inTutorial()
+            ? `<span class="badge">tutorial ${st.i + 1}/${TUT_DECK.length} · new character</span>`
+            : `<span class="badge">new character</span>`;
+      h = `${badge}<div class="th glyph">${disp(c)}</div><p class="hook">${info[1]}</p><div class="buf">${buf || '_'}</div>`;
+    } else if (cur[0] === 'f') {
+      const [, c, , meta] = cur;
+      const safeMeta = meta || { badge: '🎯 Flaw Buster', hook: '' };
+      h = `<span class="badge rev">${safeMeta.badge}</span><div class="th glyph">${disp(c)}</div><p class="hook">${safeMeta.hook}</p><div class="buf">${buf || '_'}</div>`;
     } else {
-      line = `<p class="hint">${emoObj ? 'Sound out the Thai script to unlock this mystery emoji.' : 'Type how it sounds.'}</p>`;
+      const [, th, rom, mean, emoObj] = cur;
+      const shown = rows.slice(-3);
+      let g = '';
+      for (const r of shown) {
+        g += `<div class="gr">${[...r.g].map((ch, i) => `<div class="t ${r.r[i]}">${ch}</div>`).join('')}</div>`;
+      }
+      if (!solved) {
+        g += `<div class="gr">${[...rom].map((_, i) => `<div class="t ${buf[i] ? 'f' : ''}">${buf[i] || ''}</div>`).join('')}</div>`;
+      }
+
+      let topBadge = '';
+      if (solved && emoObj) {
+        topBadge = `<div class="emo-reveal"><div class="emo-hero">${emoObj.emo}</div><span class="emo-tag">🏆 Unlocked!</span></div>`;
+      } else if (st.clueMode === 'learn' && emoObj) {
+        topBadge = `<div class="emo-reveal"><div class="emo-hero">${emoObj.emo}</div><span class="badge">💡 ${mean}</span></div>`;
+      } else if (emoObj) {
+        topBadge = `<span class="badge">mystery emoji · ${th.length} Thai chars</span>`;
+      } else if (inTutorial()) {
+        topBadge = `<span class="badge">tutorial ${st.i + 1}/${TUT_DECK.length}</span>`;
+      }
+
+      let line;
+      if (solved) {
+        const tipSuffix = lastFlawTip ? ` · <span class="rule-pill">🎯 ${lastFlawTip}</span>` : '';
+        line = `<p class="hint ok">${emoObj ? emoObj.emo + ' ' : ''}${th} (${rom}) = “${mean}” <button id="spkbtn" class="spk-inline" title="Listen to pronunciation">🔊</button>${tipSuffix}</p>`;
+      } else if (hint) {
+        if (st.phoneticsMode === 'literal') {
+          line = `<p class="hint">${[...th].map(c => disp(c) + ' ' + ((U[c] && U[c][0]) || 'silent')).join(' · ')}</p>`;
+        } else {
+          line = explainRealThai(th);
+        }
+      } else if (lastFlawTip) {
+        line = `<p class="hint"><span class="rule-pill">🎯 ${lastFlawTip}</span></p>`;
+      } else if (st.clueMode === 'learn') {
+        line = `<p class="hint">💡 “${mean}” · Sound out the Thai script (${st.phoneticsMode === 'real' ? 'Real Thai syllables' : 'Literal 1:1'}).</p>`;
+      } else {
+        line = `<p class="hint">${emoObj ? 'Sound out the Thai script to unlock this mystery emoji.' : 'Type how it sounds.'}</p>`;
+      }
+      h = `${topBadge}<div class="th word">${th}</div><div class="grid">${g}</div>${line}<div class="act-row">${(!solved && !hint) ? '<button id="hintbtn">hint</button>' : ''}</div>`;
     }
-    h = `${topBadge}<div class="th word">${th}</div><div class="grid">${g}</div>${line}<div class="act-row">${(!solved && !hint) ? '<button id="hintbtn">hint</button>' : ''}</div>`;
+  } catch (e) {
+    cur = ['i', 'ม', false, null];
+    locked = false;
+    h = `<span class="badge">recovered</span><div class="th glyph">${disp('ม')}</div><p class="hook">${U['ม'][1]}</p><div class="buf">_</div>`;
   }
+
   h += `<div id="feed">${feed.map(f => `<div>${f}</div>`).join('')}</div>`;
   el.innerHTML = h;
   el.className = extra || '';
@@ -604,7 +677,7 @@ function drawTrophyStage(el) {
     if (trQuery) {
       if (!unl) return false;
       const q = trQuery.toLowerCase();
-      return item.en.toLowerCase().includes(q) || item.th.includes(q) || item.rom.includes(q) || item.emo.includes(q);
+      return (item.en || '').toLowerCase().includes(q) || (item.th || '').includes(q) || (item.rom || '').includes(q) || (item.emo || '').includes(q);
     }
     return true;
   });
@@ -627,7 +700,7 @@ function drawTrophyStage(el) {
           <button data-tf="unlocked" class="${trFilter === 'unlocked' ? 'on' : ''}">Earned</button>
           <button data-tf="core" class="${trFilter === 'core' ? 'on' : ''}">Core</button>
         </div>
-        <input class="tr-search" id="trsearch" placeholder="Search earned..." value="${trQuery.replace(/"/g, '&quot;')}">
+        <input class="tr-search" id="trsearch" placeholder="Search earned..." value="${trQuery.replace(/"/g, '"')}">
         <button id="trsync" class="badge" style="cursor:pointer" title="Copy or paste 1-Click Sync Code">🔄 Sync Code</button>
         <button id="trback" class="badge" style="cursor:pointer">▶ Back to Play</button>
       </div>
@@ -656,14 +729,17 @@ function drawTrophyStage(el) {
 
   el.querySelectorAll('#trfseg button').forEach(b => b.onclick = () => { trFilter = b.dataset.tf; trLimit = 180; drawTrophyStage(el); });
   const inp = document.getElementById('trsearch');
-  inp.oninput = e => {
-    trQuery = e.target.value;
-    trLimit = 180;
-    drawTrophyStage(el);
-    const ni = document.getElementById('trsearch');
-    if (ni) { ni.focus(); ni.setSelectionRange(trQuery.length, trQuery.length); }
-  };
-  document.getElementById('trback').onclick = () => toggleTrophy(false);
+  if (inp) {
+    inp.oninput = e => {
+      trQuery = e.target.value;
+      trLimit = 180;
+      drawTrophyStage(el);
+      const ni = document.getElementById('trsearch');
+      if (ni) { ni.focus(); ni.setSelectionRange(trQuery.length, trQuery.length); }
+    };
+  }
+  const backBtn = document.getElementById('trback');
+  if (backBtn) backBtn.onclick = () => toggleTrophy(false);
 
   const trSpk = document.getElementById('trspk');
   if (trSpk) trSpk.onclick = () => speakThai(sel.th, true);
@@ -677,6 +753,7 @@ function drawTrophyStage(el) {
         const merged = importSyncCode(input, st);
         if (merged) {
           st = merged;
+          sanitizeRuntimeState(st);
           unlockedSet.clear();
           st.emoUnlocked.forEach(id => unlockedSet.add(id));
           emoKnownSet.clear();
@@ -692,15 +769,19 @@ function drawTrophyStage(el) {
   if (more) more.onclick = () => { trLimit += 300; drawTrophyStage(el); };
   const prac = document.getElementById('trprac');
   if (prac) prac.onclick = () => {
+    clearPendingNext();
     viewMode = 'play';
-    document.getElementById('trophbtn').classList.remove('on');
+    const tb = document.getElementById('trophbtn');
+    if (tb) tb.classList.remove('on');
     cur = ['w', sel.th, romanizeThai(sel.th, st.phoneticsMode), sel.en, sel, false];
     buf = ''; rows = []; misses = 0; solved = false; hint = false; keyst = {}; locked = false; lastFlawTip = '';
     draw();
   };
   el.querySelectorAll('.tr-cell').forEach(cell => {
     cell.onclick = () => {
-      selectedTrophy = EMOJI_DB[+cell.dataset.id];
+      const found = EMOJI_DB[+cell.dataset.id];
+      if (!found) return;
+      selectedTrophy = found;
       if (unlockedSet.has(selectedTrophy.id) && st.snd === 'voice') {
         speakThai(selectedTrophy.th, true);
       }
@@ -710,8 +791,13 @@ function drawTrophyStage(el) {
 }
 
 function next() {
+  clearPendingNext();
+  if (!cur) {
+    render();
+    return;
+  }
   if (cur[0] === 'i') {
-    feed.push(`${disp(cur[1])} → ${U[cur[1]][0] || 'silent'}`);
+    feed.push(`${disp(cur[1])} → ${(U[cur[1]] && U[cur[1]][0]) || 'silent'}`);
     st.charLastSeen[cur[1]] = st.emoTurn;
   } else if (cur[0] === 'f') {
     feed.push(`🎯 ${disp(cur[1])} → ${cur[2]}`);
@@ -737,8 +823,16 @@ function next() {
   render();
 }
 
+function scheduleNext() {
+  clearPendingNext();
+  nextTimer = setTimeout(() => {
+    nextTimer = null;
+    next();
+  }, 600);
+}
+
 function press(k) {
-  if (viewMode === 'trophy' || locked) return;
+  if (viewMode === 'trophy' || locked || !cur) return;
   if (k === 'Enter') {
     if (solved) return next();
     if (cur[0] === 'w' && buf.length === cur[2].length) submit();
@@ -748,8 +842,8 @@ function press(k) {
   if (k === 'Backspace') { buf = buf.slice(0, -1); return draw(); }
 
   if (cur[0] === 'i' || cur[0] === 'f') {
-    const key = cur[0] === 'f' ? cur[2] : U[cur[1]][0];
-    if (!key) { locked = true; ping(); draw('pop'); setTimeout(next, 600); return; }
+    const key = cur[0] === 'f' ? cur[2] : (U[cur[1]] && U[cur[1]][0]);
+    if (!key) { locked = true; ping(); draw('pop'); scheduleNext(); return; }
     buf += k; tick();
     if (buf === key) {
       if (cur[0] === 'f' && cur[3] && cur[3].flawKey) {
@@ -757,7 +851,7 @@ function press(k) {
       } else if (misses === 0) {
         recordFlaw(`char:${cur[1]}`, -1);
       }
-      locked = true; ping(); draw('pop'); setTimeout(next, 600); return;
+      locked = true; ping(); draw('pop'); scheduleNext(); return;
     }
     if (!key.startsWith(buf)) {
       misses++;
@@ -801,18 +895,20 @@ function submit() {
 
 // ---------- Controls & Virtual Keyboard ----------
 const kb = document.getElementById('kb');
-[['q','w','e','r','t','y','u','i','o','p'], ['a','s','d','f','g','h','j','k','l'], ['z','x','c','v','b','n','m','Backspace'], ['Enter']].forEach(r => {
-  const d = document.createElement('div'); d.className = 'row';
-  r.forEach(k => {
-    const b = document.createElement('button'); b.className = 'k'; b.dataset.k = k; b.type = 'button';
-    b.textContent = k === 'Backspace' ? '⌫' : k === 'Enter' ? 'enter' : k;
-    if (k === 'Backspace') b.setAttribute('aria-label', 'Backspace');
-    if (k === 'Enter') b.classList.add('w', 'go');
-    b.addEventListener('pointerdown', e => { e.preventDefault(); press(k); });
-    d.appendChild(b);
+if (kb) {
+  [['q','w','e','r','t','y','u','i','o','p'], ['a','s','d','f','g','h','j','k','l'], ['z','x','c','v','b','n','m','Backspace'], ['Enter']].forEach(r => {
+    const d = document.createElement('div'); d.className = 'row';
+    r.forEach(k => {
+      const b = document.createElement('button'); b.className = 'k'; b.dataset.k = k; b.type = 'button';
+      b.textContent = k === 'Backspace' ? '⌫' : k === 'Enter' ? 'enter' : k;
+      if (k === 'Backspace') b.setAttribute('aria-label', 'Backspace');
+      if (k === 'Enter') b.classList.add('w', 'go');
+      b.addEventListener('pointerdown', e => { e.preventDefault(); press(k); });
+      d.appendChild(b);
+    });
+    kb.appendChild(d);
   });
-  kb.appendChild(d);
-});
+}
 
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -821,34 +917,42 @@ addEventListener('keydown', e => {
   else if (e.key === 'Enter' || e.key === 'Backspace') { e.preventDefault(); press(e.key); }
 });
 
-function setPhoneticsMode(pm) {
+function setPhoneticsMode(pm, persist = true) {
   st.phoneticsMode = pm === 'literal' ? 'literal' : 'real';
   window.AMBIENT_PHONETICS_MODE = st.phoneticsMode;
   document.querySelectorAll('#pseg button').forEach(b => b.classList.toggle('on', b.dataset.p === st.phoneticsMode));
-  save();
-  render();
+  if (persist) {
+    save();
+    render();
+  }
 }
 document.querySelectorAll('#pseg button').forEach(b => b.onclick = () => setPhoneticsMode(b.dataset.p));
 
-function setClueMode(cm) {
+function setClueMode(cm, persist = true) {
   st.clueMode = cm === 'learn' ? 'learn' : 'mystery';
   document.querySelectorAll('#cseg button').forEach(b => b.classList.toggle('on', b.dataset.c === st.clueMode));
-  save();
-  draw();
+  if (persist) {
+    save();
+    draw();
+  }
 }
 document.querySelectorAll('#cseg button').forEach(b => b.onclick = () => setClueMode(b.dataset.c));
 
 function toggleTrophy(force) {
+  clearPendingNext();
   viewMode = (force !== undefined ? (force ? 'trophy' : 'play') : (viewMode === 'trophy' ? 'play' : 'trophy'));
-  document.getElementById('trophbtn').classList.toggle('on', viewMode === 'trophy');
+  const tb = document.getElementById('trophbtn');
+  if (tb) tb.classList.toggle('on', viewMode === 'trophy');
   draw();
 }
-document.getElementById('trophbtn').onclick = () => toggleTrophy();
+const trophBtn = document.getElementById('trophbtn');
+if (trophBtn) trophBtn.onclick = () => toggleTrophy();
 
-function setMode(m) {
-  st.m = m; document.body.className = m;
-  document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
-  save();
+function setMode(m, persist = true) {
+  st.m = m === 'B' ? 'B' : 'A';
+  document.body.className = st.m;
+  document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.m === st.m));
+  if (persist) save();
 }
 document.querySelectorAll('#seg button').forEach(b => b.onclick = () => setMode(b.dataset.m));
 
@@ -857,10 +961,10 @@ function syncSoundUI() {
   document.querySelectorAll('#sseg button').forEach(b => b.classList.toggle('on', b.dataset.s === st.snd));
 }
 
-function setSoundMode(s, preview = false) {
+function setSoundMode(s, preview = false, persist = true) {
   st.snd = normalizeSnd(s);
   syncSoundUI();
-  save();
+  if (persist) save();
   if (preview) {
     if (st.snd === 'dings') ping();
     else if (st.snd === 'voice') ping(cur && cur[0] === 'w' ? cur[1] : 'สวัสดี');
@@ -868,12 +972,12 @@ function setSoundMode(s, preview = false) {
 }
 document.querySelectorAll('#sseg button').forEach(b => b.onclick = () => setSoundMode(b.dataset.s, true));
 
-function setFont(f) {
+function setFont(f, persist = true) {
   if (!FONTS[f] && f !== 'mix') f = 'modern';
   st.f = f;
   applyTurnFont();
   document.querySelectorAll('#fseg button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
-  save();
+  if (persist) save();
 }
 document.querySelectorAll('#fseg button').forEach(b => b.onclick = () => setFont(b.dataset.f));
 
@@ -926,9 +1030,9 @@ if (replayTutBtn) {
   };
 }
 
-setFont(st.f || 'modern');
-setMode(st.m || 'A');
-setSoundMode(st.snd || 'dings', false);
-setPhoneticsMode(st.phoneticsMode || 'real');
-setClueMode(st.clueMode || 'mystery');
+setFont(st.f || 'modern', false);
+setMode(st.m || 'A', false);
+setSoundMode(st.snd || 'dings', false, false);
+setPhoneticsMode(st.phoneticsMode || 'real', false);
+setClueMode(st.clueMode || 'mystery', false);
 render();

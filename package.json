@@ -2,7 +2,7 @@
 	"name": "ama-code",
 	"displayName": "AMA Code",
 	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
-	"version": "1.1.0",
+	"version": "1.12.0",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0"
@@ -367,6 +367,7 @@
 		"watch:esbuild": "node esbuild.mjs --watch",
 		"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
 		"package": "npm run protos && npm-run-all -p build:webview build:extension",
+		"package:vsix": "npx vsce package --no-dependencies --allow-package-secrets sendgrid",
 		"protos": "node scripts/build-proto.mjs",
 		"download-ripgrep": "node scripts/download-ripgrep.mjs",
 		"postprotos": "biome format --config-path ./biome.jsonc src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched",
