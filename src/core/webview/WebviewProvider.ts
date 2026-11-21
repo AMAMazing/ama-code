@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { Controller } from "@core/controller/index"
 import axios from "axios"
@@ -63,6 +64,23 @@ export abstract class WebviewProvider {
 	abstract isVisible(): boolean
 
 	/**
+	 * Resolves the webview URL for the synced Ambient Language core assets,
+	 * preferring the packaged webview build folder with fallback to the local ambientlanguage repo.
+	 */
+	private getAmbientCoreUrl(): string {
+		const extRoot = HostProvider.get().extensionFsPath
+		const builtCorePath = path.resolve(extRoot, "webview-ui", "build", "ambient-core", "app.js")
+		if (existsSync(builtCorePath)) {
+			return this.getExtensionUrl("webview-ui", "build", "ambient-core")
+		}
+		const localCorePath = path.resolve(extRoot, "ambientlanguage", "packages", "core", "app.js")
+		if (existsSync(localCorePath)) {
+			return this.getExtensionUrl("ambientlanguage", "packages", "core")
+		}
+		return this.getExtensionUrl("webview-ui", "build", "ambient-core")
+	}
+
+	/**
 	 * Defines and returns the HTML that should be rendered within the webview panel.
 	 *
 	 * @remarks This is also the place where references to the React webview build files
@@ -83,6 +101,8 @@ export abstract class WebviewProvider {
 		// The codicon font from the React build output
 		const codiconsUrl = this.getExtensionUrl("node_modules", "@vscode", "codicons", "dist", "codicon.css")
 
+		const ambientCoreUrl = this.getAmbientCoreUrl()
+
 		const nonce = getNonce()
 
 		return /*html*/ `
@@ -92,14 +112,17 @@ export abstract class WebviewProvider {
 				<meta charset="utf-8">
 				<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
 				<meta name="theme-color" content="#000000">
+				<meta name="ambient-core-base-url" content="${ambientCoreUrl}">
+				<meta name="csp-nonce" content="${nonce}">
 				<link rel="stylesheet" type="text/css" href="${stylesUrl}">
 				<link href="${codiconsUrl}" rel="stylesheet" />
 				<meta http-equiv="Content-Security-Policy" content="default-src 'none';
 					connect-src ${this.getCspSource()} https://*.posthog.com https://*.cline.bot; 
-					font-src ${this.getCspSource()} data:; 
-					style-src ${this.getCspSource()} 'unsafe-inline'; 
+					font-src ${this.getCspSource()} data: https://fonts.gstatic.com; 
+					style-src ${this.getCspSource()} 'unsafe-inline' https://fonts.googleapis.com; 
 					img-src ${this.getCspSource()} https: data:; 
-					script-src 'nonce-${nonce}' 'unsafe-eval';">
+					frame-src 'self' ${this.getCspSource()} blob: data:;
+					script-src 'nonce-${nonce}' ${this.getCspSource()} 'unsafe-eval';">
 				<title>AMA Code</title>
 			</head>
 			<body>
@@ -157,6 +180,16 @@ export abstract class WebviewProvider {
 		const nonce = getNonce()
 		const stylesUrl = this.getExtensionUrl("webview-ui", "build", "assets", "index.css")
 		const codiconsUrl = this.getExtensionUrl("node_modules", "@vscode", "codicons", "dist", "codicon.css")
+		const devPublicCorePath = path.resolve(
+			HostProvider.get().extensionFsPath,
+			"webview-ui",
+			"public",
+			"ambient-core",
+			"app.js",
+		)
+		const ambientCoreUrl = existsSync(devPublicCorePath)
+			? `http://${localServerUrl}/ambient-core`
+			: this.getAmbientCoreUrl()
 
 		const scriptEntrypoint = "src/main.tsx"
 		const scriptUrl = `http://${localServerUrl}/${scriptEntrypoint}`
@@ -173,10 +206,11 @@ export abstract class WebviewProvider {
 
 		const csp = [
 			"default-src 'none'",
-			`font-src ${this.getCspSource()} data:`,
+			`font-src ${this.getCspSource()} data: https://fonts.gstatic.com`,
 			`style-src ${this.getCspSource()} 'unsafe-inline' https://* http://${localServerUrl} http://0.0.0.0:${localPort}`,
 			`img-src ${this.getCspSource()} https: data:`,
-			`script-src 'unsafe-eval' https://* http://${localServerUrl} http://0.0.0.0:${localPort} 'nonce-${nonce}'`,
+			`frame-src 'self' ${this.getCspSource()} http://${localServerUrl} http://0.0.0.0:${localPort} blob: data:`,
+			`script-src 'unsafe-eval' https://* http://${localServerUrl} http://0.0.0.0:${localPort} ${this.getCspSource()} 'nonce-${nonce}'`,
 			`connect-src ${this.getCspSource()} https://* ws://${localServerUrl} ws://0.0.0.0:${localPort} http://${localServerUrl} http://0.0.0.0:${localPort}`,
 		]
 
@@ -186,6 +220,8 @@ export abstract class WebviewProvider {
 				<head>
 					<meta charset="utf-8">
 					<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
+					<meta name="ambient-core-base-url" content="${ambientCoreUrl}">
+					<meta name="csp-nonce" content="${nonce}">
 					<meta http-equiv="Content-Security-Policy" content="${csp.join("; ")}">
 					<link rel="stylesheet" type="text/css" href="${stylesUrl}">
 					<link href="${codiconsUrl}" rel="stylesheet" />

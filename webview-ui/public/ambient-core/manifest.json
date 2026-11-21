@@ -1,0 +1,12 @@
+{
+  "syncedAt": "2026-11-21T10:15:12.257Z",
+  "sourceCommit": "bf94202260c4e3927d8beb3aca8da40fb6afaf28",
+  "files": [
+    "app.js",
+    "emojis.js",
+    "phonetics.js",
+    "style.css",
+    "sync.js",
+    "tutorial.js"
+  ]
+}

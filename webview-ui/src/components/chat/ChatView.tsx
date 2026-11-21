@@ -1,3 +1,4 @@
+
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
@@ -11,6 +12,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
 import { FileServiceClient, UiServiceClient } from "@/services/grpc-client"
 import { Navbar } from "../menu/Navbar"
+import AmbientLanguagePanel from "./AmbientLanguagePanel"
 import AutoApproveBar from "./auto-approve-menu/AutoApproveBar"
 // Import utilities and hooks from the new structure
 import {
@@ -70,6 +72,34 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	const apiMetrics = useMemo(() => getApiMetrics(modifiedMessages), [modifiedMessages])
 
 	const lastApiReqTotalTokens = useMemo(() => getLastApiReqTotalTokens(modifiedMessages) || undefined, [modifiedMessages])
+
+	// Detect when a prompt has been sent and the user is waiting for an agent response
+	const isAgentWaiting = useMemo(() => {
+		if (!task) {
+			return false
+		}
+		const lastRawMessage = messages.at(-1)
+		if (!lastRawMessage) {
+			return false
+		}
+		if (lastRawMessage.type === "ask") {
+			return false
+		}
+		if (lastRawMessage.type === "say" && lastRawMessage.say === "completion_result") {
+			return false
+		}
+		if (lastRawMessage.type === "say" && lastRawMessage.say === "api_req_started") {
+			try {
+				const info = JSON.parse(lastRawMessage.text || "{}")
+				if (info.cancelReason === "user_cancelled") {
+					return false
+				}
+			} catch {
+				// ignore parse errors
+			}
+		}
+		return true
+	}, [task, messages])
 
 	// Use custom hooks for state management
 	const chatState = useChatState(messages)
@@ -369,6 +399,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				)}
 			</div>
 			<footer className="bg-(--vscode-sidebar-background)" style={{ gridRow: "2" }}>
+				<AmbientLanguagePanel isAgentWaiting={isAgentWaiting} />
 				<AutoApproveBar />
 				<ActionButtons
 					chatState={chatState}
