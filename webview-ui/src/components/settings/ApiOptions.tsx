@@ -7,6 +7,20 @@ import { OPENROUTER_MODEL_PICKER_Z_INDEX } from "./OpenRouterModelPicker"
 import { OpenAICompatibleProvider } from "./providers/OpenAICompatible"
 import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers"
 
+export const TALKTOLM_BASE_URL_MARKER = "talktollm://local"
+
+const AISTUDIO_SUBMODELS = [
+	{ value: "aistudio-carbon", label: "Gemini 4 Carbon", aliases: ["aistudio-carbon", "gemini-4-carbon"] },
+	{ value: "aistudio-neon", label: "Gemini 4 Neon", aliases: ["aistudio-neon", "gemini-4-neon"] },
+	{ value: "aistudio-argon", label: "Gemini 4 Argon", aliases: ["aistudio-argon", "gemini-4-argon"] },
+	{ value: "aistudio-hydrogen", label: "Gemini 4 Hydrogen", aliases: ["aistudio-hydrogen", "gemini-4-hydrogen"] },
+	{ value: "aistudio-pro", label: "Gemini Pro", aliases: ["aistudio", "aistudio-pro"] },
+	{ value: "aistudio-flash", label: "Gemini Flash", aliases: ["aistudio_flash", "aistudio-flash"] },
+	{ value: "aistudio-flash-lite", label: "Gemini Flash Lite", aliases: ["gemini-3.1-flash-lite-preview", "aistudio-flash-lite"] },
+]
+
+const AISTUDIO_ALL_IDS = new Set(AISTUDIO_SUBMODELS.flatMap((m) => m.aliases))
+
 interface ApiOptionsProps {
 	showModelOptions: boolean
 	apiErrorMessage?: string
@@ -29,6 +43,124 @@ export const DropdownContainer = styled.div<{ zIndex?: number }>`
 	}
 `
 
+const FieldLabel = styled.label`
+	display: block;
+	margin-bottom: 6px;
+	font-size: 12px;
+	font-weight: 500;
+`
+
+const OptionList = styled.div`
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+`
+
+/** Full-width, wrapping radio-style row. Works at any sidebar width. */
+const OptionRow = styled.button<{ $active: boolean }>`
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	width: 100%;
+	padding: 7px 9px;
+	text-align: left;
+	cursor: pointer;
+	border-radius: 4px;
+	border: 1px solid ${(p) => (p.$active ? "var(--vscode-focusBorder)" : "var(--vscode-dropdown-border)")};
+	background: ${(p) =>
+		p.$active ? "color-mix(in srgb, var(--vscode-focusBorder) 14%, var(--vscode-input-background))" : "var(--vscode-input-background)"};
+	color: var(--vscode-foreground);
+	transition: border-color 0.12s ease, background-color 0.12s ease;
+
+	&:hover {
+		border-color: var(--vscode-focusBorder);
+	}
+	&:focus-visible {
+		outline: 1px solid var(--vscode-focusBorder);
+		outline-offset: 1px;
+	}
+`
+
+const RadioDot = styled.span<{ $active: boolean }>`
+	flex-shrink: 0;
+	width: 12px;
+	height: 12px;
+	margin-top: 2px;
+	border-radius: 50%;
+	box-sizing: border-box;
+	border: 1px solid ${(p) => (p.$active ? "var(--vscode-focusBorder)" : "var(--vscode-descriptionForeground)")};
+	background: ${(p) => (p.$active ? "var(--vscode-focusBorder)" : "transparent")};
+	box-shadow: ${(p) => (p.$active ? "inset 0 0 0 2px var(--vscode-input-background)" : "none")};
+`
+
+const OptionText = styled.span`
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	gap: 1px;
+`
+
+const OptionTitle = styled.span`
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.3;
+`
+
+const OptionHint = styled.span`
+	font-size: 10.5px;
+	line-height: 1.3;
+	color: var(--vscode-descriptionForeground);
+`
+
+/** Auto-wrapping chip grid: 3 across when wide, 2 or 1 when the sidebar is narrow. */
+const ChipGrid = styled.div`
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+	gap: 4px;
+`
+
+const Chip = styled.button<{ $active: boolean }>`
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	padding: 6px 8px;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.2;
+	cursor: pointer;
+	border-radius: 4px;
+	border: 1px solid ${(p) => (p.$active ? "var(--vscode-button-background)" : "var(--vscode-dropdown-border)")};
+	background: ${(p) => (p.$active ? "var(--vscode-button-background)" : "var(--vscode-input-background)")};
+	color: ${(p) => (p.$active ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)")};
+	transition: background-color 0.12s ease, border-color 0.12s ease;
+
+	&:hover:not([aria-checked="true"]) {
+		border-color: var(--vscode-focusBorder);
+	}
+	&:focus-visible {
+		outline: 1px solid var(--vscode-focusBorder);
+		outline-offset: 1px;
+	}
+`
+
+const StyledSelect = styled.select`
+	width: 100%;
+	box-sizing: border-box;
+	padding: 6px 8px;
+	border-radius: 4px;
+	font-size: 12px;
+	cursor: pointer;
+	background-color: var(--vscode-dropdown-background);
+	color: var(--vscode-dropdown-foreground);
+	border: 1px solid var(--vscode-dropdown-border);
+
+	&:focus-visible {
+		outline: 1px solid var(--vscode-focusBorder);
+		outline-offset: -1px;
+	}
+`
+
 declare module "vscode" {
 	interface LanguageModelChatSelector {
 		vendor?: string
@@ -47,7 +179,12 @@ const ApiOptions = ({
 }: ApiOptionsProps) => {
 	const { apiConfiguration } = useExtensionState()
 	const { selectedProvider } = normalizeApiConfiguration(apiConfiguration, currentMode)
-	const { handleModeFieldChange } = useApiConfigurationHandlers()
+	const { handleFieldsChange, handleModeFieldChange } = useApiConfigurationHandlers()
+
+	const isTalkToLlm = apiConfiguration?.openAiBaseUrl === TALKTOLM_BASE_URL_MARKER
+	const currentModel =
+		(currentMode === "plan" ? apiConfiguration?.planModeOpenAiModelId : apiConfiguration?.actModeOpenAiModelId) || "gemini"
+	const isAiStudioModel = AISTUDIO_ALL_IDS.has(currentModel)
 
 	useEffect(() => {
 		if (selectedProvider !== "openai") {
@@ -55,50 +192,157 @@ const ApiOptions = ({
 		}
 	}, [selectedProvider, currentMode, handleModeFieldChange])
 
+	const selectProviderMode = async (useTalkToLlm: boolean) => {
+		if (useTalkToLlm) {
+			const defaultTalkModel =
+				currentModel && (currentModel === "gemini" || currentModel === "deepseek" || AISTUDIO_ALL_IDS.has(currentModel))
+					? currentModel
+					: "gemini"
+			await handleFieldsChange({
+				planModeApiProvider: "openai",
+				actModeApiProvider: "openai",
+				openAiBaseUrl: TALKTOLM_BASE_URL_MARKER,
+				openAiApiKey: "talktollm-local",
+				planModeOpenAiModelId: defaultTalkModel,
+				actModeOpenAiModelId: defaultTalkModel,
+			})
+		} else {
+			await handleFieldsChange({
+				planModeApiProvider: "openai",
+				actModeApiProvider: "openai",
+				openAiBaseUrl: apiConfiguration?.openAiBaseUrl === TALKTOLM_BASE_URL_MARKER ? "" : apiConfiguration?.openAiBaseUrl,
+			})
+		}
+	}
+
+	const selectTalkToLlmModel = async (model: string) => {
+		let targetModel = model
+		if (model === "aistudio") {
+			const matchingSub = AISTUDIO_SUBMODELS.find((m) => m.aliases.includes(currentModel))
+			targetModel = matchingSub ? matchingSub.value : "aistudio-carbon"
+		}
+		await handleFieldsChange({
+			openAiBaseUrl: TALKTOLM_BASE_URL_MARKER,
+			openAiApiKey: "talktollm-local",
+			planModeOpenAiModelId: targetModel,
+			actModeOpenAiModelId: targetModel,
+		})
+	}
+
+	const activeAiStudioValue =
+		AISTUDIO_SUBMODELS.find((m) => m.aliases.includes(currentModel))?.value || "aistudio-carbon"
+
+	const modelChoices = [
+		{ id: "gemini", label: "🧠 Gemini", active: currentModel === "gemini" },
+		{ id: "deepseek", label: "🔍 DeepSeek", active: currentModel === "deepseek" },
+		{ id: "aistudio", label: "🎨 AIStudio", active: isAiStudioModel },
+	] as const
+
 	return (
-		<div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: isPopup ? -10 : 0 }}>
-			<DropdownContainer className="dropdown-container">
-				<label htmlFor="api-provider">
-					<span style={{ fontWeight: 500 }}>API Provider</span>
-				</label>
-				<div
-					data-testid="provider-selector-input"
-					id="api-provider"
-					style={{
-						padding: "6px 8px",
-						backgroundColor: "var(--vscode-dropdown-background)",
-						color: "var(--vscode-dropdown-foreground)",
-						border: "1px solid var(--vscode-dropdown-border)",
-						borderRadius: 2,
-						fontSize: 13,
-					}}>
-					OpenAI Compatible
+		<div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: isPopup ? -10 : 0 }}>
+			<div>
+				<FieldLabel id="api-provider-label">API Provider</FieldLabel>
+				<OptionList aria-labelledby="api-provider-label" data-testid="provider-selector-input" id="api-provider" role="radiogroup">
+					<OptionRow
+						$active={!isTalkToLlm}
+						aria-checked={!isTalkToLlm}
+						onClick={() => selectProviderMode(false)}
+						role="radio"
+						type="button">
+						<RadioDot $active={!isTalkToLlm} />
+						<OptionText>
+							<OptionTitle>OpenAI Compatible</OptionTitle>
+							<OptionHint>Use your own endpoint and API key</OptionHint>
+						</OptionText>
+					</OptionRow>
+					<OptionRow
+						$active={isTalkToLlm}
+						aria-checked={isTalkToLlm}
+						onClick={() => selectProviderMode(true)}
+						role="radio"
+						type="button">
+						<RadioDot $active={isTalkToLlm} />
+						<OptionText>
+							<OptionTitle>talktollm</OptionTitle>
+							<OptionHint>Use at your own risk</OptionHint>
+						</OptionText>
+					</OptionRow>
+				</OptionList>
+			</div>
+
+			{isTalkToLlm ? (
+				<div>
+					<FieldLabel id="talktollm-model-label">AI Model</FieldLabel>
+					<ChipGrid aria-labelledby="talktollm-model-label" role="radiogroup">
+						{modelChoices.map((m) => (
+							<Chip
+								$active={m.active}
+								aria-checked={m.active}
+								key={m.id}
+								onClick={() => selectTalkToLlmModel(m.id)}
+								role="radio"
+								type="button">
+								{m.label}
+							</Chip>
+						))}
+					</ChipGrid>
+
+					{isAiStudioModel && (
+						<div style={{ marginTop: 10 }}>
+							<label
+								htmlFor="aistudio-submodel-select"
+								style={{
+									display: "block",
+									fontSize: 11,
+									color: "var(--vscode-descriptionForeground)",
+									marginBottom: 4,
+								}}>
+								AI Studio model
+							</label>
+							<StyledSelect
+								id="aistudio-submodel-select"
+								onChange={(e) => selectTalkToLlmModel(e.target.value)}
+								value={activeAiStudioValue}>
+								{AISTUDIO_SUBMODELS.map((sub) => (
+									<option key={sub.value} value={sub.value}>
+										{sub.label}
+									</option>
+								))}
+							</StyledSelect>
+						</div>
+					)}
 				</div>
-			</DropdownContainer>
+			) : (
+				<>
+					{apiConfiguration && (
+						<OpenAICompatibleProvider
+							currentMode={currentMode}
+							isPopup={isPopup}
+							showModelOptions={showModelOptions}
+						/>
+					)}
 
-			{apiConfiguration && (
-				<OpenAICompatibleProvider currentMode={currentMode} isPopup={isPopup} showModelOptions={showModelOptions} />
-			)}
-
-			{apiErrorMessage && (
-				<p
-					style={{
-						margin: "-10px 0 4px 0",
-						fontSize: 12,
-						color: "var(--vscode-errorForeground)",
-					}}>
-					{apiErrorMessage}
-				</p>
-			)}
-			{modelIdErrorMessage && (
-				<p
-					style={{
-						margin: "-10px 0 4px 0",
-						fontSize: 12,
-						color: "var(--vscode-errorForeground)",
-					}}>
-					{modelIdErrorMessage}
-				</p>
+					{apiErrorMessage && (
+						<p
+							style={{
+								margin: "-10px 0 4px 0",
+								fontSize: 12,
+								color: "var(--vscode-errorForeground)",
+							}}>
+							{apiErrorMessage}
+						</p>
+					)}
+					{modelIdErrorMessage && (
+						<p
+							style={{
+								margin: "-10px 0 4px 0",
+								fontSize: 12,
+								color: "var(--vscode-errorForeground)",
+							}}>
+							{modelIdErrorMessage}
+						</p>
+					)}
+				</>
 			)}
 		</div>
 	)

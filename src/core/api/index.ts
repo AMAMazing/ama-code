@@ -4,6 +4,13 @@ import { ClineStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
 import { ClineTool } from "@/shared/tools"
 import { OpenAiHandler } from "./providers/openai"
+import {
+	dispatchNtfyForResponse,
+	NTFY_LEVEL_HEADER,
+	NTFY_TOPIC_HEADER,
+	TALKTOLM_BASE_URL_MARKER,
+	TalkToLlmHandler,
+} from "./providers/talktollm"
 import { ApiStream, ApiStreamUsageChunk } from "./transform/stream"
 
 export type CommonApiHandlerOptions = {
@@ -32,22 +39,74 @@ export interface SingleCompletionHandler {
 	completePrompt(prompt: string): Promise<string>
 }
 
+function wrapHandlerWithNtfy(handler: ApiHandler, headers?: Record<string, string>): ApiHandler {
+	const ntfyLevel = (headers?.[NTFY_LEVEL_HEADER] || "none").toLowerCase()
+	return {
+		getModel: () => handler.getModel(),
+		getApiStreamUsage: handler.getApiStreamUsage ? () => handler.getApiStreamUsage!() : undefined,
+		abort: () => {
+			TalkToLlmHandler.killActiveProcesses()
+			handler.abort?.()
+		},
+		async *createMessage(
+			systemPrompt: string,
+			messages: ClineStorageMessage[],
+			tools?: ClineTool[],
+			useResponseApi?: boolean,
+		): ApiStream {
+			let effectiveSystemPrompt = systemPrompt
+			if (ntfyLevel === "all") {
+				effectiveSystemPrompt +=
+					"\n\nYou MUST include a `<summary>` tag inside your `<thinking>` block for every tool call. This summary should be a very brief, user-friendly explanation of the action you are about to take. For example: `<summary>Reading the project's configuration to check dependencies.</summary>`."
+			}
+			let accumulatedText = ""
+			const stream = handler.createMessage(effectiveSystemPrompt, messages, tools, useResponseApi)
+			for await (const chunk of stream) {
+				if (chunk.type === "text") {
+					accumulatedText += chunk.text
+				}
+				yield chunk
+			}
+			if (accumulatedText) {
+				await dispatchNtfyForResponse(accumulatedText, headers)
+			}
+		},
+	}
+}
+
 function createHandlerForProvider(
 	_apiProvider: string | undefined,
 	options: Omit<ApiConfiguration, "apiProvider">,
 	mode: Mode,
 ): ApiHandler {
-	return new OpenAiHandler({
+	const modelId = mode === "plan" ? options.planModeOpenAiModelId : options.actModeOpenAiModelId
+	const isTalkToLlm = options.openAiBaseUrl === TALKTOLM_BASE_URL_MARKER
+
+	if (isTalkToLlm) {
+		return new TalkToLlmHandler({
+			onRetryAttempt: options.onRetryAttempt,
+			modelId: modelId || "gemini",
+			headers: options.openAiHeaders,
+		})
+	}
+
+	const cleanHeaders = { ...(options.openAiHeaders || {}) }
+	delete cleanHeaders[NTFY_TOPIC_HEADER]
+	delete cleanHeaders[NTFY_LEVEL_HEADER]
+
+	const openAiHandler = new OpenAiHandler({
 		onRetryAttempt: options.onRetryAttempt,
 		openAiApiKey: options.openAiApiKey,
 		openAiBaseUrl: options.openAiBaseUrl,
 		azureApiVersion: options.azureApiVersion,
 		azureIdentity: options.azureIdentity,
-		openAiHeaders: options.openAiHeaders,
-		openAiModelId: mode === "plan" ? options.planModeOpenAiModelId : options.actModeOpenAiModelId,
+		openAiHeaders: cleanHeaders,
+		openAiModelId: modelId,
 		openAiModelInfo: mode === "plan" ? options.planModeOpenAiModelInfo : options.actModeOpenAiModelInfo,
 		reasoningEffort: mode === "plan" ? options.planModeReasoningEffort : options.actModeReasoningEffort,
 	})
+
+	return wrapHandlerWithNtfy(openAiHandler, options.openAiHeaders)
 }
 
 export function buildApiHandler(configuration: ApiConfiguration, mode: Mode): ApiHandler {
