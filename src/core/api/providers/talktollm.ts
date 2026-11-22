@@ -20,6 +20,10 @@ export interface TalkToLlmHandlerOptions extends CommonApiHandlerOptions {
 	headers?: Record<string, string>
 }
 
+export function normalizeTalkToLlmLineEndings(text: string): string {
+	return text.replace(/\r+\n/g, "\n").replace(/\r/g, "\n")
+}
+
 const PYTHON_TALKTOLM_RUNNER = `
 import sys
 import os
@@ -32,8 +36,8 @@ import threading
 
 if sys.platform.startswith("win"):
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", newline="\\n")
+        sys.stderr.reconfigure(encoding="utf-8", newline="\\n")
         sys.stdin.reconfigure(encoding="utf-8")
     except Exception:
         pass
@@ -136,6 +140,8 @@ def main():
 
     if not isinstance(response, str):
         response = str(response or "")
+
+    response = re.sub(r"\\r+\\n", "\\n", response).replace("\\r", "\\n")
 
     sys.stdout.write("\\n<<<TALKTOLM_RESPONSE_START>>>\\n")
     sys.stdout.write(response)
@@ -325,7 +331,9 @@ export class TalkToLlmHandler implements ApiHandler {
 					const endIdx = stdoutBuf.indexOf(endMarker)
 
 					if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-						const extracted = stdoutBuf.slice(startIdx + startMarker.length, endIdx).trim()
+						const extracted = normalizeTalkToLlmLineEndings(
+							stdoutBuf.slice(startIdx + startMarker.length, endIdx),
+						).trim()
 						resolve(extracted)
 						return
 					}
@@ -340,16 +348,17 @@ export class TalkToLlmHandler implements ApiHandler {
 						return
 					}
 
-					resolve(stdoutBuf.trim())
+					resolve(normalizeTalkToLlmLineEndings(stdoutBuf).trim())
 				})
 
 				proc.stdin?.write(payload, "utf-8")
 				proc.stdin?.end()
 			})
 
-			await dispatchNtfyForResponse(responseText, this.options.headers)
+			const normalizedResponse = normalizeTalkToLlmLineEndings(responseText)
+			await dispatchNtfyForResponse(normalizedResponse, this.options.headers)
 
-			const lines = responseText.split(/(\r?\n)/)
+			const lines = normalizedResponse.split(/(\n)/)
 			for (const segment of lines) {
 				if (segment) {
 					yield {
@@ -362,7 +371,7 @@ export class TalkToLlmHandler implements ApiHandler {
 			yield {
 				type: "usage",
 				inputTokens: effectiveSystemPrompt.length,
-				outputTokens: responseText.length,
+				outputTokens: normalizedResponse.length,
 			}
 		} finally {
 			if (proc && TalkToLlmHandler.activeProcesses.has(proc)) {
