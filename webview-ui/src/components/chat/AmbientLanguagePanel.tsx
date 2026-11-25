@@ -250,11 +250,11 @@ export const AmbientLanguagePanel: React.FC<AmbientLanguagePanelProps> = ({ isAg
 					<button
 						className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border border-[#252d39] bg-[#141922] text-[11px] text-[#9aa4b2] hover:text-[#e8ecf1] hover:border-[#5cc8ff]/50 transition-colors cursor-pointer"
 						onClick={handleToggleOpen}
-						title="Play Ambient Thai flashcards while waiting for the agent"
+						title="Play Ambient Language flashcards while waiting for the agent"
 						type="button">
 						<span className="flex items-center gap-1.5 truncate">
 							<span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-							<span className="truncate font-medium text-[#e8ecf1]">🇹🇭 Ambient Thai</span>
+							<span className="truncate font-medium text-[#e8ecf1]">🌍 Ambient Language</span>
 							<span className="text-[#7d8896] truncate">· Play while waiting</span>
 						</span>
 						<ChevronUp className="w-3.5 h-3.5 shrink-0" />

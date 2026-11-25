@@ -1,33 +1,4 @@
-// ---------- Diagnostic Flaw Engine (Lookalikes, Positional Shifts & Pre-posed Order) ----------
-const LOOKALIKE_TWINS = {
-  'ด': [['ต', 'Flat roof ด = d · Notched roof ต = t'], ['ค', 'Tucked loop ด = d · Arch loop ค = k']],
-  'ต': [['ด', 'Notched roof ต = t · Flat roof ด = d']],
-  'บ': [['ป', 'Short stem บ = b · Tall stem ป = p'], ['ษ', 'Open bucket บ = b · Crossbar ษ = s']],
-  'ป': [['บ', 'Tall stem ป = p · Short stem บ = b'], ['ฝ', 'Flat bottom ป = p · W-bottom ฝ = f']],
-  'ม': [['น', 'Front loop ม = m · Back loop น = n']],
-  'น': [['ม', 'Back loop น = n · Front loop ม = m'], ['บ', 'Bottom loop น = n · No loop บ = b']],
-  'ก': [['ถ', 'No loop ก = g · Inner loop ถ = t'], ['ภ', 'No loop ก = g · Outer loop ภ = p']],
-  'ถ': [['ก', 'Inner loop ถ = t · No loop ก = g'], ['ภ', 'Inner loop ถ = t · Outer loop ภ = p']],
-  'ภ': [['ก', 'Outer loop ภ = p · No loop ก = g'], ['ถ', 'Outer loop ภ = p · Inner loop ถ = t']],
-  'พ': [['ฟ', 'Short stem พ = p · Tall tail ฟ = f'], ['ผ', 'Outer loop พ = p · Inner loop ผ = p']],
-  'ฟ': [['พ', 'Tall tail ฟ = f · Short stem พ = p'], ['ฝ', 'Outer loop ฟ = f · Inner loop ฝ = f']],
-  'ผ': [['ฝ', 'Short stem ผ = p · Tall tail ฝ = f']],
-  'ฝ': [['ผ', 'Tall tail ฝ = f · Short stem ผ = p']],
-  'ส': [['ล', 'Top tail ส = s · No top tail ล = l']],
-  'ล': [['ส', 'No top tail ล = l · Top tail ส = s']],
-  'ช': [['ซ', 'Smooth head ช = ch · Notched head ซ = s'], ['ข', 'Right tail ช = ch · No tail ข = k']],
-  'ซ': [['ช', 'Notched head ซ = s · Smooth head ช = ch']],
-  'เ': [['แ', 'Single pole เ = ay · Double pole แ = ae'], ['โ', 'Short pole เ = ay · Tall hook โ = oh']],
-  'แ': [['เ', 'Double pole แ = ae · Single pole เ = ay']],
-  'โ': [['เ', 'Tall hook โ = oh · Short pole เ = ay'], ['ไ', 'Round hook โ = oh · Zigzag ไ = ai']],
-  'ไ': [['โ', 'Zigzag ไ = ai · Round hook โ = oh']],
-  'ุ': [['ู', 'Tiny peg ◌ุ = u · Longer shoe ◌ู = uu']],
-  'ู': [['ุ', 'Longer shoe ◌ู = uu · Tiny peg ◌ุ = u']],
-  'ิ': [['ี', 'No tick ◌ิ = i · Tall tick ◌ี = ee']],
-  'ี': [['ิ', 'Tall tick ◌ี = ee · No tick ◌ิ = i'], ['ื', 'One tick ◌ี = ee · Two ticks ◌ื = ue']]
-};
-
-// ---------- State & Persistence ----------
+// ---------- Unified Multi-Language State & Persistence ----------
 let st = AmbientSync.loadInitial({
   i: 0,
   n: 0,
@@ -42,6 +13,17 @@ let st = AmbientSync.loadInitial({
   flaws: {},
   lastFlawTurn: -1,
   emoTurn: 0,
+  trackMode: 'thai',
+  activeShowId: 'all',
+  mixRatio: '3:1',
+  mixTurn: 0,
+  freshBoost: 0,
+  mediaStage: 'auto',
+  mediaMinCount: 2,
+  mediaTurn: 0,
+  shows: {},
+  mediaProgress: {},
+  mediaIgnored: [],
   updatedAt: Date.now()
 });
 
@@ -54,6 +36,13 @@ function sanitizeRuntimeState(state) {
   state.lastFlawTurn = Number.isFinite(state.lastFlawTurn) && state.lastFlawTurn >= -1 ? Math.floor(state.lastFlawTurn) : -1;
   state.emoUnlocked = Array.isArray(state.emoUnlocked) ? state.emoUnlocked : [];
   state.emoKnown = Array.isArray(state.emoKnown) && state.emoKnown.length ? state.emoKnown : ['ม', 'า', 'น', 'ก', 'ี'];
+  state.shows = state.shows && typeof state.shows === 'object' ? state.shows : {};
+  state.mediaProgress = state.mediaProgress && typeof state.mediaProgress === 'object' ? state.mediaProgress : {};
+  state.mediaIgnored = Array.isArray(state.mediaIgnored) ? state.mediaIgnored : [];
+  state.trackMode = ['thai', 'media', 'mix'].includes(state.trackMode) ? state.trackMode : 'thai';
+  state.mixRatio = ['3:1', '1:1', '1:3'].includes(state.mixRatio) ? state.mixRatio : '3:1';
+  state.mediaStage = ['auto', 'recognize', 'cloze', 'listen'].includes(state.mediaStage) ? state.mediaStage : 'auto';
+  state.mediaMinCount = Number.isFinite(state.mediaMinCount) ? Math.min(5, Math.max(1, Math.floor(state.mediaMinCount))) : 2;
   if ((state.emoTurn > 0 || state.emoUnlocked.length > 0) && state.i < TUT_DECK.length) {
     state.i = TUT_DECK.length;
   }
@@ -65,18 +54,11 @@ window.AMBIENT_PHONETICS_MODE = st.phoneticsMode || 'real';
 const unlockedSet = new Set(st.emoUnlocked);
 const emoKnownSet = new Set(st.emoKnown);
 
-function inTutorial() {
-  return st.i < TUT_DECK.length;
-}
-
+function inTutorial() { return st.i < TUT_DECK.length; }
 function seedTutorialGlyphs() {
-  for (const step of TUT_DECK) {
-    if (step[0] === 'i') emoKnownSet.add(step[1]);
-  }
+  for (const step of TUT_DECK) if (step[0] === 'i') emoKnownSet.add(step[1]);
 }
-if (!inTutorial()) {
-  seedTutorialGlyphs();
-}
+if (!inTutorial()) seedTutorialGlyphs();
 
 const save = () => {
   st.emoUnlocked = [...unlockedSet];
@@ -96,259 +78,12 @@ AmbientSync.subscribe(
     st.emoKnown.forEach(c => emoKnownSet.add(c));
     if (!inTutorial()) seedTutorialGlyphs();
     window.AMBIENT_PHONETICS_MODE = st.phoneticsMode;
-    syncSoundUI();
+    syncAllUI();
     updateHeaderCounts();
   }
 );
 
-function recordFlaw(key, delta) {
-  if (!key) return;
-  st.flaws = st.flaws || {};
-  const nextVal = (st.flaws[key] || 0) + delta;
-  if (nextVal <= 0) delete st.flaws[key];
-  else st.flaws[key] = Math.min(nextVal, 9);
-}
-
-function getWordFeatures(th) {
-  const { syllables } = analyzeRealThai(th);
-  const initials = new Set();
-  const finals = new Map();
-  const preVowels = new Set();
-
-  for (const s of syllables) {
-    const raw = [...s.th].filter(c => U[c] !== undefined && !TONES.has(c) && c !== '์' && c !== 'ฯ');
-    if (!raw.length) continue;
-    let idx = 0;
-    if (PRE_VOWELS.has(raw[0])) {
-      preVowels.add(raw[0]);
-      idx++;
-    }
-    if (idx < raw.length && CONSONANTS.has(raw[idx])) {
-      if (raw[idx] === 'ห' && idx + 1 < raw.length && HO_NAM_FOLLOWERS.has(raw[idx + 1])) {
-        initials.add(raw[idx + 1]);
-      } else {
-        initials.add(raw[idx]);
-      }
-    }
-    const lastCh = raw[raw.length - 1];
-    if (raw.length >= 2 && CONSONANTS.has(lastCh) && lastCh !== raw[idx]) {
-      const fSnd = FINAL_SOUND[lastCh];
-      const baseSnd = U[lastCh] ? U[lastCh][0] : '';
-      if (fSnd && fSnd !== baseSnd) finals.set(lastCh, fSnd);
-    }
-  }
-  return { initials, finals, preVowels, syllables };
-}
-
-function diagnoseAttempt(th, targetRom, guess) {
-  const events = [];
-  const feat = getWordFeatures(th);
-  const g = (guess || '').toLowerCase();
-
-  // 1. Visual Lookalike Twin Confusion
-  for (const initChar of feat.initials) {
-    const twins = LOOKALIKE_TWINS[initChar];
-    if (!twins || !U[initChar]) continue;
-    const trueSnd = U[initChar][0];
-    if (trueSnd && !g.startsWith(trueSnd)) {
-      for (const [twinChar, hook] of twins) {
-        const twinSnd = U[twinChar] && U[twinChar][0];
-        if (twinSnd && twinSnd !== trueSnd && g.startsWith(twinSnd)) {
-          const pairKey = [initChar, twinChar].sort().join('|');
-          events.push({ key: `twin:${pairKey}`, weight: 2, tip: `Lookalike: ${hook}` });
-        }
-      }
-    }
-  }
-
-  // 2. Positional Final Consonant Sound Shifts (-n, -t, -p, -k)
-  if (st.phoneticsMode !== 'literal') {
-    for (const [finChar, shiftedSnd] of feat.finals.entries()) {
-      const initSnd = U[finChar] && U[finChar][0];
-      if (initSnd && g.endsWith(initSnd) && !targetRom.endsWith(initSnd)) {
-        events.push({
-          key: `final:${finChar}`,
-          weight: 2,
-          tip: `Position shift: ${finChar} is “${initSnd}” at start, but “-${shiftedSnd}” at the end`
-        });
-      }
-    }
-
-    // 3. Pre-posed Vowel Order (typing เ/แ/โ/ไ/ใ before the consonant)
-    for (const pv of feat.preVowels) {
-      const pvSnd = U[pv] && U[pv][0];
-      if (pvSnd && g.startsWith(pvSnd) && !targetRom.startsWith(pvSnd)) {
-        events.push({
-          key: `pre:${pv}`,
-          weight: 2,
-          tip: `Order: ${disp(pv)} (${pvSnd}) is written left, but spoken AFTER the consonant`
-        });
-      }
-    }
-  }
-
-  // 4. Syllable-aligned character struggle
-  let offset = 0;
-  for (const s of feat.syllables) {
-    const sRom = s.rom;
-    const gSlice = g.slice(offset, offset + sRom.length);
-    offset += sRom.length;
-    if (gSlice !== sRom) {
-      for (const ch of s.th) {
-        if (U[ch] && U[ch][0]) {
-          events.push({ key: `char:${ch}`, weight: 1, tip: `${disp(ch)} = “${U[ch][0]}”` });
-        }
-      }
-    }
-  }
-  return events;
-}
-
-function healWordFlaws(th) {
-  if (!st.flaws) return;
-  const feat = getWordFeatures(th);
-  for (const ch of new Set([...th])) {
-    if (st.flaws[`char:${ch}`]) recordFlaw(`char:${ch}`, -1);
-    if (LOOKALIKE_TWINS[ch]) {
-      for (const [tw] of LOOKALIKE_TWINS[ch]) {
-        const pk = `twin:${[ch, tw].sort().join('|')}`;
-        if (st.flaws[pk]) recordFlaw(pk, -1);
-      }
-    }
-  }
-  for (const [finChar] of feat.finals) {
-    if (st.flaws[`final:${finChar}`]) recordFlaw(`final:${finChar}`, -1);
-  }
-  for (const pv of feat.preVowels) {
-    if (st.flaws[`pre:${pv}`]) recordFlaw(`pre:${pv}`, -1);
-  }
-}
-
-// Replaces blind timer revision with Flaw-Aware Emoji Selection + 6-Turn Flaw Buster Clinic
-function pickFlawAwareEmojiStep() {
-  const targetRom = item => (st.phoneticsMode === 'literal' ? item.romLit : item.romReal);
-  const flaws = st.flaws || {};
-
-  // Every 6 emojis (only if flaws exist with score >= 2), run a quick Flaw Buster drill
-  if (st.emoTurn > 0 && st.emoTurn % 6 === 0 && st.lastFlawTurn !== st.emoTurn) {
-    const entries = Object.entries(flaws)
-      .filter(([, sc]) => sc >= 2)
-      .sort((a, b) => b[1] - a[1]);
-
-    if (entries.length) {
-      st.lastFlawTurn = st.emoTurn;
-      const [flawKey] = entries[0];
-
-      if (flawKey.startsWith('twin:')) {
-        const [c1, c2] = flawKey.slice(5).split('|');
-        if (c1 && c2 && U[c1] && U[c2] && U[c1][0] && U[c2][0]) {
-          const twinInfo = (LOOKALIKE_TWINS[c1] || []).find(t => t[0] === c2) ||
-                           (LOOKALIKE_TWINS[c2] || []).find(t => t[0] === c1);
-          const hook = twinInfo ? twinInfo[1] : `${disp(c1)} (${U[c1][0]}) vs ${disp(c2)} (${U[c2][0]})`;
-          const target = st.emoTurn % 2 === 0 ? c1 : c2;
-          const other = target === c1 ? c2 : c1;
-          return ['f', target, U[target][0], {
-            flawKey,
-            badge: `🎯 Flaw Buster · Spot the Twin (${disp(target)} vs ${disp(other)})`,
-            hook: `${hook} — Type ${disp(target)}:`
-          }];
-        }
-      }
-
-      if (flawKey.startsWith('final:')) {
-        const ch = flawKey.slice(6);
-        const shifted = FINAL_SOUND[ch];
-        if (ch && U[ch] && shifted) {
-          return ['f', ch, shifted, {
-            flawKey,
-            badge: `🎯 Flaw Buster · End-of-Syllable ${ch}`,
-            hook: `At start ${ch} = “${U[ch][0]}”, but at the END of a syllable ${ch} → “-${shifted}”. Type its ending sound:`
-          }];
-        }
-      }
-
-      if (flawKey.startsWith('char:')) {
-        const ch = flawKey.slice(5);
-        if (ch && U[ch] && U[ch][0]) {
-          const tw = LOOKALIKE_TWINS[ch] && LOOKALIKE_TWINS[ch][0];
-          return ['f', ch, U[ch][0], {
-            flawKey,
-            badge: `🎯 Flaw Buster · Tricky Glyph`,
-            hook: `${U[ch][1]}${tw ? ' · (' + tw[1] + ')' : ''}`
-          }];
-        }
-      }
-    }
-  }
-
-  // Pick next locked emoji: fewest chars + Stealth Bonus for words containing active flaws
-  let best = null, bestScore = -1e9;
-  for (let idx = 0; idx < EMOJI_DB.length; idx++) {
-    const item = EMOJI_DB[idx];
-    if (unlockedSet.has(item.id)) continue;
-    const chars = [...item.th];
-    const uniqueChars = [...new Set(chars)];
-    let knownCount = 0;
-    for (const c of chars) if (emoKnownSet.has(c)) knownCount++;
-    const unknownUnique = uniqueChars.filter(c => !emoKnownSet.has(c)).length;
-
-    let flawBonus = 0;
-    if (unknownUnique === 0) {
-      for (const c of uniqueChars) {
-        if (flaws[`char:${c}`]) flawBonus += flaws[`char:${c}`] * 95;
-        if (LOOKALIKE_TWINS[c]) {
-          for (const [tw] of LOOKALIKE_TWINS[c]) {
-            const pk = `twin:${[c, tw].sort().join('|')}`;
-            if (flaws[pk]) flawBonus += flaws[pk] * 140;
-          }
-        }
-      }
-      if (PRE_VOWELS.has(chars[0]) && flaws[`pre:${chars[0]}`]) flawBonus += flaws[`pre:${chars[0]}`] * 150;
-      const lastCh = chars[chars.length - 1];
-      if (chars.length >= 2 && flaws[`final:${lastCh}`]) flawBonus += flaws[`final:${lastCh}`] * 160;
-    }
-
-    const sc = -(chars.length * 1000) - (unknownUnique * 220) + (knownCount * 50) + (item.isCore ? 80 : 0) + Math.min(flawBonus, 950);
-    if (sc > bestScore) {
-      bestScore = sc;
-      best = item;
-    }
-  }
-
-  if (!best) best = EMOJI_DB[Math.abs(st.emoTurn) % EMOJI_DB.length] || EMOJI_DB[0];
-
-  for (const c of best.th) {
-    if (!U[c]) continue;
-    if (!emoKnownSet.has(c)) {
-      emoKnownSet.add(c);
-      st.charLastSeen[c] = st.emoTurn;
-      save();
-      return ['i', c, false, best];
-    }
-  }
-
-  for (const c of best.th) st.charLastSeen[c] = st.emoTurn;
-  const rom = targetRom(best) || romanizeThai(best.th, st.phoneticsMode) || 'thai';
-  return ['w', best.th, rom, best.en, best, false];
-}
-
-function getStep() {
-  if (inTutorial()) {
-    const raw = TUT_DECK[st.i];
-    if (raw) {
-      if (raw[0] === 'i') {
-        emoKnownSet.add(raw[1]);
-        return raw;
-      }
-      const rom = romanizeThai(raw[1], st.phoneticsMode);
-      return ['w', raw[1], rom, raw[3], raw[4] || null, false];
-    }
-    st.i = TUT_DECK.length;
-  }
-  return pickFlawAwareEmojiStep();
-}
-
-// ---------- Upgraded Audio Synth & Spoken Thai TTS ----------
+// ---------- Audio Synth & Multi-Language TTS ----------
 let ac = null;
 let thVoice = null;
 
@@ -361,9 +96,7 @@ function initVoices() {
 }
 if (typeof speechSynthesis !== 'undefined') {
   initVoices();
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = initVoices;
-  }
+  if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = initVoices;
 }
 
 function getAudioContext() {
@@ -374,20 +107,12 @@ function getAudioContext() {
     ac = ac || new Ctor();
     if (ac.state === 'suspended') ac.resume().catch(() => {});
     return ac;
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
 function closeAudioResources() {
-  try {
-    if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
-  } catch (e) {}
-  try {
-    if (ac && ac.state !== 'closed' && typeof ac.close === 'function') {
-      ac.close().catch(() => {});
-    }
-  } catch (e) {}
+  try { if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel(); } catch (e) {}
+  try { if (ac && ac.state !== 'closed' && typeof ac.close === 'function') ac.close().catch(() => {}); } catch (e) {}
   ac = null;
 }
 window.addEventListener('pagehide', closeAudioResources);
@@ -399,31 +124,16 @@ function playNote(freq, duration, vol = 0.07, delay = 0, type = 'triangle') {
     const ctx = getAudioContext();
     if (!ctx) return;
     const start = ctx.currentTime + delay;
-
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, start);
-
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.linearRampToValueAtTime(vol, start + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-
     osc.connect(gain).connect(ctx.destination);
     osc.start(start);
     osc.stop(start + duration + 0.02);
-
-    const subOsc = ctx.createOscillator();
-    const subGain = ctx.createGain();
-    subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(freq * 2, start);
-    subGain.gain.setValueAtTime(0.0001, start);
-    subGain.gain.linearRampToValueAtTime(vol * 0.22, start + 0.008);
-    subGain.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.55);
-
-    subOsc.connect(subGain).connect(ctx.destination);
-    subOsc.start(start);
-    subOsc.stop(start + duration * 0.55 + 0.02);
   } catch (e) {}
 }
 
@@ -435,7 +145,6 @@ function speakThai(thText, force = false) {
     const u = new SpeechSynthesisUtterance(thText);
     u.lang = 'th-TH';
     u.rate = 0.92;
-    u.pitch = 1.0;
     if (!thVoice) initVoices();
     if (thVoice) u.voice = thVoice;
     speechSynthesis.speak(u);
@@ -458,21 +167,7 @@ const ping = thToSpeak => {
 
 const tick = () => {
   if (st.snd === 'off') return;
-  try {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    const s = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(420, s);
-    osc.frequency.exponentialRampToValueAtTime(170, s + 0.032);
-    g.gain.setValueAtTime(0.035, s);
-    g.gain.exponentialRampToValueAtTime(0.0001, s + 0.032);
-    osc.connect(g).connect(ctx.destination);
-    osc.start(s);
-    osc.stop(s + 0.035);
-  } catch (e) {}
+  playNote(420, 0.032, 0.03, 0, 'sine');
 };
 
 const soft = () => {
@@ -481,10 +176,11 @@ const soft = () => {
   playNote(174.61, 0.22, 0.04, 0.065, 'sine');
 };
 
-// ---------- Game Loop & Trophy UI ----------
+// ---------- Game Loop, Media Engine & View State ----------
 let cur, buf = '', rows = [], misses = 0, solved = false, hint = false, keyst = {}, locked = false, lastFlawTip = '', feed = [];
+let lastMediaKey = '';
 let nextTimer = null;
-let viewMode = 'play';
+let viewMode = 'play'; // 'play' | 'trophy' | 'library'
 let trFilter = 'all', trQuery = '', trLimit = 180, selectedTrophy = EMOJI_DB[0];
 
 const FONTS = {
@@ -506,17 +202,183 @@ function applyTurnFont() {
   document.documentElement.style.setProperty('--thf', activeFont);
 }
 
+function isMediaStep(step) {
+  return Boolean(step && (step[0] === 'm' || step[0] === 'm-empty'));
+}
+
+function getThaiStep() {
+  if (inTutorial()) {
+    const raw = TUT_DECK[st.i];
+    if (raw) {
+      if (raw[0] === 'i') {
+        emoKnownSet.add(raw[1]);
+        return raw;
+      }
+      const rom = romanizeThai(raw[1], st.phoneticsMode);
+      return ['w', raw[1], rom, raw[3], raw[4] || null, false];
+    }
+    st.i = TUT_DECK.length;
+  }
+  return ThaiCoach.pickFlawAwareEmojiStep(st, unlockedSet, emoKnownSet, save);
+}
+
+function getStep() {
+  const activeTrack = typeof MediaEngine !== 'undefined' ? MediaEngine.pickTrackForTurn(st) : 'thai';
+  if (activeTrack === 'media' && typeof MediaEngine !== 'undefined') {
+    return MediaEngine.pickNextMediaStep(st, lastMediaKey);
+  }
+  return getThaiStep();
+}
+
 function updateHeaderCounts() {
   const tc = document.getElementById('trophcnt');
   if (tc) tc.textContent = `${unlockedSet.size}/${EMOJI_DB.length}`;
+
+  const readyCards = typeof MediaEngine !== 'undefined' ? MediaEngine.getAllReadyCards(st).length : 0;
+  const lc = document.getElementById('libcnt');
+  if (lc) lc.textContent = readyCards > 0 ? String(readyCards) : '+';
+
   const cnt = document.getElementById('cnt');
   if (!cnt) return;
-  if (inTutorial()) {
-    cnt.textContent = `tutorial ${st.i + 1}/${TUT_DECK.length}`;
+  if (st.trackMode === 'media') {
+    const shows = typeof MediaEngine !== 'undefined' ? MediaEngine.getShowsList(st).length : 0;
+    cnt.textContent = shows ? `${readyCards} cards` : 'upload .md';
+  } else if (st.trackMode === 'mix') {
+    cnt.textContent = st.freshBoost > 0 ? `⚡ boost (${st.freshBoost})` : `${emoKnownSet.size}th · ${readyCards}m`;
+  } else if (inTutorial()) {
+    cnt.textContent = `tut ${st.i + 1}/${TUT_DECK.length}`;
   } else {
     cnt.textContent = `${emoKnownSet.size}/${Object.keys(U).length} glyphs`;
   }
 }
+
+function openSyncPrompt() {
+  const code = exportSyncCode(st);
+  const input = prompt('Copy your 1-Click Sync Code, or paste a code from another device to merge progress:', code);
+  if (input && input !== code) {
+    const merged = importSyncCode(input, st);
+    if (merged) {
+      st = merged;
+      sanitizeRuntimeState(st);
+      unlockedSet.clear();
+      st.emoUnlocked.forEach(id => unlockedSet.add(id));
+      emoKnownSet.clear();
+      st.emoKnown.forEach(c => emoKnownSet.add(c));
+      save();
+      syncAllUI();
+      draw();
+    }
+  }
+}
+
+function replayMediaAudio() {
+  if (!cur || cur[0] !== 'm') return;
+  const { card, stage } = cur[1];
+  const prog = (st.mediaProgress && st.mediaProgress[card.cardKey]) || null;
+  const rate = stage === 2 && prog && prog.streak >= 4 ? 1.06 : 0.94;
+  MediaEngine.speakLang(card.text, card.lang, rate);
+}
+
+function answerMedia(choiceIdx) {
+  if (!cur || cur[0] !== 'm') return;
+  const data = cur[1];
+  if (data.answeredIdx >= 0) return;
+  const chosen = data.choices[choiceIdx];
+  if (!chosen) return;
+
+  data.answeredIdx = choiceIdx;
+  data.correct = Boolean(chosen.correct);
+  solved = true;
+
+  const key = data.card.cardKey;
+  const prev = st.mediaProgress[key] || { streak: 0, seen: 0, correct: 0, wrong: 0, lastTurn: 0, stage: 0 };
+  const nextStreak = data.correct ? prev.streak + 1 : 0;
+  st.mediaProgress[key] = {
+    streak: nextStreak,
+    seen: prev.seen + 1,
+    correct: prev.correct + (data.correct ? 1 : 0),
+    wrong: prev.wrong + (data.correct ? 0 : 1),
+    lastTurn: st.mediaTurn,
+    stage: nextStreak >= 3 ? 2 : nextStreak >= 1 ? 1 : 0
+  };
+  save();
+
+  if (data.correct) {
+    playNote(523.25, 0.22, 0.05, 0);
+    playNote(783.99, 0.34, 0.055, 0.07);
+    if (st.snd === 'voice') setTimeout(() => replayMediaAudio(), 90);
+    draw('pop');
+  } else {
+    soft();
+    if (st.snd !== 'off') setTimeout(() => replayMediaAudio(), 110);
+    draw();
+  }
+}
+
+function ignoreMediaTerm(card) {
+  if (!card) return;
+  if (!st.mediaIgnored.includes(card.cardKey)) st.mediaIgnored.push(card.cardKey);
+  save();
+  if (viewMode === 'library') draw();
+  else render();
+}
+
+function editMediaGloss(card) {
+  if (!card || !st.shows || !st.shows[card.showId]) return;
+  const term = st.shows[card.showId].terms && st.shows[card.showId].terms[card.key];
+  if (!term) return;
+  const nextGloss = prompt(`Set English meaning for “${card.text}”:`, term.customGloss || term.gloss || '');
+  if (nextGloss === null) return;
+  term.customGloss = nextGloss.trim().slice(0, 120);
+  st.shows[card.showId].updatedAt = Date.now();
+  save();
+  if (cur && cur[0] === 'm' && cur[1].card.cardKey === card.cardKey) {
+    cur[1].card.gloss = term.customGloss || term.gloss;
+    const rightChoice = cur[1].choices.find(c => c.correct);
+    if (rightChoice) rightChoice.gloss = cur[1].card.gloss;
+  }
+  draw();
+}
+
+const mediaApi = {
+  answerMedia,
+  replayMediaAudio,
+  nextStep: () => next(),
+  ignoreMediaTerm,
+  editMediaGloss,
+  openLibrary: () => setViewMode('library'),
+  closeLibrary: () => setViewMode('play'),
+  openSyncPrompt,
+  setTrackMode: m => setTrackMode(m, true),
+  redraw: () => draw(),
+  selectShow: id => {
+    st.activeShowId = id;
+    save();
+    draw();
+  },
+  deleteShow: id => {
+    if (!st.shows[id]) return;
+    if (!confirm(`Delete show “${st.shows[id].name}”?`)) return;
+    delete st.shows[id];
+    if (st.activeShowId === id) {
+      const rem = Object.keys(st.shows);
+      st.activeShowId = rem.length ? rem[0] : 'all';
+    }
+    save();
+    draw();
+  },
+  importTrancy: ({ mdText, showId, name, lang }) => {
+    const existing = showId && st.shows[showId] ? st.shows[showId] : null;
+    const res = TrancyParser.ingestTrancyIntoShow(existing, mdText, { name, lang, minCount: st.mediaMinCount });
+    st.shows[res.show.id] = res.show;
+    st.activeShowId = res.show.id;
+    st.freshBoost = 12;
+    if (st.trackMode === 'thai') st.trackMode = 'mix';
+    save();
+    syncAllUI();
+    return res;
+  }
+};
 
 function render() {
   clearPendingNext();
@@ -528,6 +390,13 @@ function render() {
   }
   buf = ''; rows = []; misses = 0; solved = false; hint = false; keyst = {}; locked = false; lastFlawTip = '';
   draw();
+  if (cur && cur[0] === 'm' && viewMode === 'play') {
+    if (cur[1].stage === 2 && st.snd !== 'off') {
+      setTimeout(() => replayMediaAudio(), 140);
+    } else if (st.snd === 'voice') {
+      setTimeout(() => replayMediaAudio(), 140);
+    }
+  }
 }
 
 function score(g, t) {
@@ -537,10 +406,7 @@ function score(g, t) {
     else left[t[i]] = (left[t[i]] || 0) + 1;
   }
   for (let i = 0; i < t.length; i++) {
-    if (r[i] !== 'ok' && left[g[i]] > 0) {
-      r[i] = 'pre';
-      left[g[i]]--;
-    }
+    if (r[i] !== 'ok' && left[g[i]] > 0) { r[i] = 'pre'; left[g[i]]--; }
   }
   return r;
 }
@@ -554,22 +420,49 @@ function draw(extra) {
   if (viewMode === 'trophy') {
     el.className = 'trophy-mode';
     kb.style.display = 'none';
-    try {
-      drawTrophyStage(el);
-      return;
-    } catch (e) {
-      viewMode = 'play';
-      const tb = document.getElementById('trophbtn');
-      if (tb) tb.classList.remove('on');
-    }
+    ThaiCoach.drawTrophyStage(el, {
+      st, unlockedSet, emoKnownSet, selectedTrophy, trFilter, trQuery, trLimit,
+      onFilter: f => { trFilter = f; trLimit = 180; draw(); },
+      onSearch: q => {
+        trQuery = q; trLimit = 180; draw();
+        const ni = document.getElementById('trsearch');
+        if (ni) { ni.focus(); ni.setSelectionRange(trQuery.length, trQuery.length); }
+      },
+      onBack: () => setViewMode('play'),
+      onSpeak: th => speakThai(th, true),
+      onSync: openSyncPrompt,
+      onMore: () => { trLimit += 300; draw(); },
+      onPractice: sel => {
+        clearPendingNext();
+        viewMode = 'play';
+        syncViewButtons();
+        cur = ['w', sel.th, romanizeThai(sel.th, st.phoneticsMode), sel.en, sel, false];
+        buf = ''; rows = []; misses = 0; solved = false; hint = false; keyst = {}; locked = false; lastFlawTip = '';
+        draw();
+      },
+      onSelect: found => {
+        selectedTrophy = found;
+        if (unlockedSet.has(found.id) && st.snd === 'voice') speakThai(found.th, true);
+        draw();
+      }
+    });
+    return;
   }
 
-  if (!cur) {
-    try {
-      cur = getStep();
-    } catch (e) {
-      cur = ['i', 'ม', false, null];
-    }
+  if (viewMode === 'library' && typeof MediaEngine !== 'undefined') {
+    el.className = 'trophy-mode';
+    kb.style.display = 'none';
+    MediaEngine.renderLibraryStage(el, st, mediaApi);
+    return;
+  }
+
+  if (!cur) cur = getStep();
+
+  if (isMediaStep(cur) && typeof MediaEngine !== 'undefined') {
+    kb.style.display = 'none';
+    el.className = extra || '';
+    MediaEngine.renderMediaStage(el, cur, st, mediaApi);
+    return;
   }
 
   kb.style.display = 'flex';
@@ -616,17 +509,15 @@ function draw(extra) {
       let line;
       if (solved) {
         const tipSuffix = lastFlawTip ? ` · <span class="rule-pill">🎯 ${lastFlawTip}</span>` : '';
-        line = `<p class="hint ok">${emoObj ? emoObj.emo + ' ' : ''}${th} (${rom}) = “${mean}” <button id="spkbtn" class="spk-inline" title="Listen to pronunciation">🔊</button>${tipSuffix}</p>`;
+        line = `<p class="hint ok">${emoObj ? emoObj.emo + ' ' : ''}${th} (${rom}) = “${mean}” <button id="spkbtn" class="spk-inline" title="Listen">🔊</button>${tipSuffix}</p>`;
       } else if (hint) {
-        if (st.phoneticsMode === 'literal') {
-          line = `<p class="hint">${[...th].map(c => disp(c) + ' ' + ((U[c] && U[c][0]) || 'silent')).join(' · ')}</p>`;
-        } else {
-          line = explainRealThai(th);
-        }
+        line = st.phoneticsMode === 'literal'
+          ? `<p class="hint">${[...th].map(c => disp(c) + ' ' + ((U[c] && U[c][0]) || 'silent')).join(' · ')}</p>`
+          : explainRealThai(th);
       } else if (lastFlawTip) {
         line = `<p class="hint"><span class="rule-pill">🎯 ${lastFlawTip}</span></p>`;
       } else if (st.clueMode === 'learn') {
-        line = `<p class="hint">💡 “${mean}” · Sound out the Thai script (${st.phoneticsMode === 'real' ? 'Real Thai syllables' : 'Literal 1:1'}).</p>`;
+        line = `<p class="hint">💡 “${mean}” · Sound out the Thai script.</p>`;
       } else {
         line = `<p class="hint">${emoObj ? 'Sound out the Thai script to unlock this mystery emoji.' : 'Type how it sounds.'}</p>`;
       }
@@ -648,9 +539,7 @@ function draw(extra) {
       e.preventDefault();
       hint = true;
       if (cur[0] === 'w') {
-        for (const ch of new Set([...cur[1]])) {
-          if (U[ch] && U[ch][0]) recordFlaw(`char:${ch}`, 1);
-        }
+        for (const ch of new Set([...cur[1]])) if (U[ch] && U[ch][0]) ThaiCoach.recordFlaw(st, `char:${ch}`, 1);
         save();
       }
       draw();
@@ -668,156 +557,34 @@ function draw(extra) {
   if (en) en.textContent = solved ? 'next' : 'enter';
 }
 
-function drawTrophyStage(el) {
-  const filtered = EMOJI_DB.filter(item => {
-    const unl = unlockedSet.has(item.id);
-    if (trFilter === 'unlocked' && !unl) return false;
-    if (trFilter === 'locked' && unl) return false;
-    if (trFilter === 'core' && !item.isCore) return false;
-    if (trQuery) {
-      if (!unl) return false;
-      const q = trQuery.toLowerCase();
-      return (item.en || '').toLowerCase().includes(q) || (item.th || '').includes(q) || (item.rom || '').includes(q) || (item.emo || '').includes(q);
-    }
-    return true;
-  });
-
-  filtered.sort((a, b) => a.th.length - b.th.length || (b.isCore ? 1 : 0) - (a.isCore ? 1 : 0) || a.id - b.id);
-  const slice = filtered.slice(0, trLimit);
-
-  const sel = selectedTrophy || EMOJI_DB[0];
-  const selUnlocked = unlockedSet.has(sel.id);
-
-  el.innerHTML = `
-    <div class="tr-head">
-      <div class="tr-stats">
-        <strong>🏆 ${unlockedSet.size} / ${EMOJI_DB.length} Unlocked</strong>
-        <span>(${emoKnownSet.size}/${Object.keys(U).length} Thai glyphs learned)</span>
-      </div>
-      <div class="tr-controls">
-        <div class="seg" id="trfseg">
-          <button data-tf="all" class="${trFilter === 'all' ? 'on' : ''}">All</button>
-          <button data-tf="unlocked" class="${trFilter === 'unlocked' ? 'on' : ''}">Earned</button>
-          <button data-tf="core" class="${trFilter === 'core' ? 'on' : ''}">Core</button>
-        </div>
-        <input class="tr-search" id="trsearch" placeholder="Search earned..." value="${trQuery.replace(/"/g, '"')}">
-        <button id="trsync" class="badge" style="cursor:pointer" title="Copy or paste 1-Click Sync Code">🔄 Sync Code</button>
-        <button id="trback" class="badge" style="cursor:pointer">▶ Back to Play</button>
-      </div>
-    </div>
-    <div class="tr-detail">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:28px">${selUnlocked ? sel.emo : '❓'}</span>
-        <div style="text-align:left">
-          <div class="th-big">${selUnlocked ? sel.th : '🔒 Mystery Emoji'} ${selUnlocked ? `<button id="trspk" class="spk-inline" title="Pronounce Thai">🔊</button>` : ''}</div>
-          <div style="color:var(--dim)">${selUnlocked ? `${romanizeThai(sel.th, st.phoneticsMode)} · “${sel.en}”` : `${sel.th.length} Thai characters · Solve to reveal`}</div>
-        </div>
-      </div>
-      ${selUnlocked ? `<button id="trprac" class="badge" style="cursor:pointer">Practice Wordle</button>` : ''}
-    </div>
-    <div class="tr-grid" id="trgrid">
-      ${slice.map(item => {
-        const unl = unlockedSet.has(item.id);
-        return `<div class="tr-cell ${unl ? 'unlocked' : 'locked'}" data-id="${item.id}" title="${unl ? item.th + ' (' + romanizeThai(item.th, st.phoneticsMode) + ')' : 'Locked (' + item.th.length + ' chars)'}">
-          <span class="e">${unl ? item.emo : '❓'}</span>
-          <span class="l">${unl ? item.th : item.th.length + 'ch'}</span>
-        </div>`;
-      }).join('')}
-      ${filtered.length > trLimit ? `<button class="tr-more" id="trmore">Show more (${filtered.length - trLimit} remaining)</button>` : ''}
-    </div>
-  `;
-
-  el.querySelectorAll('#trfseg button').forEach(b => b.onclick = () => { trFilter = b.dataset.tf; trLimit = 180; drawTrophyStage(el); });
-  const inp = document.getElementById('trsearch');
-  if (inp) {
-    inp.oninput = e => {
-      trQuery = e.target.value;
-      trLimit = 180;
-      drawTrophyStage(el);
-      const ni = document.getElementById('trsearch');
-      if (ni) { ni.focus(); ni.setSelectionRange(trQuery.length, trQuery.length); }
-    };
-  }
-  const backBtn = document.getElementById('trback');
-  if (backBtn) backBtn.onclick = () => toggleTrophy(false);
-
-  const trSpk = document.getElementById('trspk');
-  if (trSpk) trSpk.onclick = () => speakThai(sel.th, true);
-
-  const syncBtn = document.getElementById('trsync');
-  if (syncBtn) {
-    syncBtn.onclick = () => {
-      const code = exportSyncCode(st);
-      const input = prompt('Copy your 1-Click Sync Code, or paste a code from another device to merge progress:', code);
-      if (input && input !== code) {
-        const merged = importSyncCode(input, st);
-        if (merged) {
-          st = merged;
-          sanitizeRuntimeState(st);
-          unlockedSet.clear();
-          st.emoUnlocked.forEach(id => unlockedSet.add(id));
-          emoKnownSet.clear();
-          st.emoKnown.forEach(c => emoKnownSet.add(c));
-          save();
-          drawTrophyStage(el);
-        }
-      }
-    };
-  }
-
-  const more = document.getElementById('trmore');
-  if (more) more.onclick = () => { trLimit += 300; drawTrophyStage(el); };
-  const prac = document.getElementById('trprac');
-  if (prac) prac.onclick = () => {
-    clearPendingNext();
-    viewMode = 'play';
-    const tb = document.getElementById('trophbtn');
-    if (tb) tb.classList.remove('on');
-    cur = ['w', sel.th, romanizeThai(sel.th, st.phoneticsMode), sel.en, sel, false];
-    buf = ''; rows = []; misses = 0; solved = false; hint = false; keyst = {}; locked = false; lastFlawTip = '';
-    draw();
-  };
-  el.querySelectorAll('.tr-cell').forEach(cell => {
-    cell.onclick = () => {
-      const found = EMOJI_DB[+cell.dataset.id];
-      if (!found) return;
-      selectedTrophy = found;
-      if (unlockedSet.has(selectedTrophy.id) && st.snd === 'voice') {
-        speakThai(selectedTrophy.th, true);
-      }
-      drawTrophyStage(el);
-    };
-  });
-}
-
 function next() {
   clearPendingNext();
-  if (!cur) {
-    render();
-    return;
-  }
-  if (cur[0] === 'i') {
+  if (!cur) return render();
+  if (cur[0] === 'm') {
+    lastMediaKey = cur[1].card.cardKey;
+    feed.push(`${cur[1].card.text} → ${cur[1].card.gloss}`);
+    st.mediaTurn = (st.mediaTurn || 0) + 1;
+    if (st.trackMode === 'mix') {
+      st.mixTurn = (st.mixTurn || 0) + 1;
+      if (st.freshBoost > 0) st.freshBoost--;
+    }
+  } else if (cur[0] === 'i') {
     feed.push(`${disp(cur[1])} → ${(U[cur[1]] && U[cur[1]][0]) || 'silent'}`);
     st.charLastSeen[cur[1]] = st.emoTurn;
+    if (inTutorial()) { st.i++; if (!inTutorial()) seedTutorialGlyphs(); }
+    else st.emoTurn++;
+    if (st.trackMode === 'mix') st.mixTurn = (st.mixTurn || 0) + 1;
   } else if (cur[0] === 'f') {
     feed.push(`🎯 ${disp(cur[1])} → ${cur[2]}`);
-  } else {
+  } else if (cur[0] === 'w') {
     const emoObj = cur[4];
     feed.push(`${emoObj ? emoObj.emo + ' ' : ''}${cur[1]} · ${cur[2]} · ${cur[3]}`);
-    if (emoObj && emoObj.id < EMOJI_DB.length) {
-      unlockedSet.add(emoObj.id);
-      selectedTrophy = emoObj;
-    }
+    if (emoObj && emoObj.id < EMOJI_DB.length) { unlockedSet.add(emoObj.id); selectedTrophy = emoObj; }
+    if (inTutorial()) { st.i++; if (!inTutorial()) seedTutorialGlyphs(); }
+    else st.emoTurn++;
+    if (st.trackMode === 'mix') st.mixTurn = (st.mixTurn || 0) + 1;
   }
   if (feed.length > 4) feed.shift();
-  if (inTutorial()) {
-    st.i++;
-    if (!inTutorial()) {
-      seedTutorialGlyphs();
-    }
-  } else if (cur[0] !== 'f') {
-    st.emoTurn++;
-  }
   st.n++;
   save();
   render();
@@ -825,14 +592,11 @@ function next() {
 
 function scheduleNext() {
   clearPendingNext();
-  nextTimer = setTimeout(() => {
-    nextTimer = null;
-    next();
-  }, 600);
+  nextTimer = setTimeout(() => { nextTimer = null; next(); }, 600);
 }
 
 function press(k) {
-  if (viewMode === 'trophy' || locked || !cur) return;
+  if (viewMode !== 'play' || locked || !cur || isMediaStep(cur)) return;
   if (k === 'Enter') {
     if (solved) return next();
     if (cur[0] === 'w' && buf.length === cur[2].length) submit();
@@ -846,18 +610,14 @@ function press(k) {
     if (!key) { locked = true; ping(); draw('pop'); scheduleNext(); return; }
     buf += k; tick();
     if (buf === key) {
-      if (cur[0] === 'f' && cur[3] && cur[3].flawKey) {
-        recordFlaw(cur[3].flawKey, misses === 0 ? -2 : -1);
-      } else if (misses === 0) {
-        recordFlaw(`char:${cur[1]}`, -1);
-      }
+      if (cur[0] === 'f' && cur[3] && cur[3].flawKey) ThaiCoach.recordFlaw(st, cur[3].flawKey, misses === 0 ? -2 : -1);
+      else if (misses === 0) ThaiCoach.recordFlaw(st, `char:${cur[1]}`, -1);
       locked = true; ping(); draw('pop'); scheduleNext(); return;
     }
     if (!key.startsWith(buf)) {
       misses++;
-      recordFlaw(cur[0] === 'f' && cur[3] ? cur[3].flawKey : `char:${cur[1]}`, 1);
-      save();
-      soft(); buf = ''; return draw('miss');
+      ThaiCoach.recordFlaw(st, cur[0] === 'f' && cur[3] ? cur[3].flawKey : `char:${cur[1]}`, 1);
+      save(); soft(); buf = ''; return draw('miss');
     }
     return draw();
   }
@@ -872,28 +632,20 @@ function submit() {
 
   if (buf === t) {
     solved = true; buf = '';
-    if (misses === 0 && !hint) {
-      healWordFlaws(cur[1]);
-    }
-    if (cur[4] && cur[4].id < EMOJI_DB.length) {
-      unlockedSet.add(cur[4].id);
-      selectedTrophy = cur[4];
-    }
-    save();
-    ping(cur[1]);
-    draw('pop');
+    if (misses === 0 && !hint) ThaiCoach.healWordFlaws(st, cur[1]);
+    if (cur[4] && cur[4].id < EMOJI_DB.length) { unlockedSet.add(cur[4].id); selectedTrophy = cur[4]; }
+    save(); ping(cur[1]); draw('pop');
   } else {
-    const diag = diagnoseAttempt(cur[1], t, buf);
+    const diag = ThaiCoach.diagnoseAttempt(st, cur[1], t, buf);
     for (const d of diag) {
-      recordFlaw(d.key, d.weight);
+      ThaiCoach.recordFlaw(st, d.key, d.weight);
       if (d.tip && d.weight >= 2) lastFlawTip = d.tip;
     }
-    save();
-    misses++; soft(); buf = ''; if (misses >= 2) hint = true; draw();
+    save(); misses++; soft(); buf = ''; if (misses >= 2) hint = true; draw();
   }
 }
 
-// ---------- Controls & Virtual Keyboard ----------
+// ---------- Virtual Keyboard & Global Shortcuts ----------
 const kb = document.getElementById('kb');
 if (kb) {
   [['q','w','e','r','t','y','u','i','o','p'], ['a','s','d','f','g','h','j','k','l'], ['z','x','c','v','b','n','m','Backspace'], ['Enter']].forEach(r => {
@@ -912,41 +664,76 @@ if (kb) {
 
 addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (viewMode === 'play' && cur && cur[0] === 'm') {
+    if (/^[1-4]$/.test(e.key)) { e.preventDefault(); answerMedia(Number(e.key) - 1); }
+    else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); replayMediaAudio(); }
+    else if (e.key === 'Enter' && solved) { e.preventDefault(); next(); }
+    else if (e.key === 'x' || e.key === 'X') { e.preventDefault(); ignoreMediaTerm(cur[1].card); }
+    return;
+  }
   if (/^[a-zA-Z]$/.test(e.key)) press(e.key.toLowerCase());
   else if (e.key === 'Enter' || e.key === 'Backspace') { e.preventDefault(); press(e.key); }
 });
+
+// ---------- Controls & Settings Wiring ----------
+function syncViewButtons() {
+  const tb = document.getElementById('trophbtn');
+  if (tb) tb.classList.toggle('on', viewMode === 'trophy');
+  const lb = document.getElementById('libbtn');
+  if (lb) lb.classList.toggle('on', viewMode === 'library');
+}
+
+function setViewMode(mode) {
+  clearPendingNext();
+  viewMode = viewMode === mode && mode !== 'play' ? 'play' : mode;
+  syncViewButtons();
+  if (viewMode === 'play') render();
+  else draw();
+}
+
+function setTrackMode(tm, persist = true) {
+  st.trackMode = ['thai', 'media', 'mix'].includes(tm) ? tm : 'thai';
+  document.querySelectorAll('#trackseg button').forEach(b => b.classList.toggle('on', b.dataset.tr === st.trackMode));
+  if (persist) {
+    save();
+    viewMode = 'play';
+    syncViewButtons();
+    render();
+  }
+}
+
+function setMixRatio(mr, persist = true) {
+  st.mixRatio = ['3:1', '1:1', '1:3'].includes(mr) ? mr : '3:1';
+  document.querySelectorAll('#mixseg button').forEach(b => b.classList.toggle('on', b.dataset.mr === st.mixRatio));
+  if (persist) { save(); updateHeaderCounts(); }
+}
+
+function setMediaStage(ms, persist = true) {
+  st.mediaStage = ['auto', 'recognize', 'cloze', 'listen'].includes(ms) ? ms : 'auto';
+  document.querySelectorAll('#mstageseg button').forEach(b => b.classList.toggle('on', b.dataset.ms === st.mediaStage));
+  if (persist) { save(); if (viewMode === 'play' && isMediaStep(cur)) render(); }
+}
+
+function setMediaMinCount(mc, persist = true) {
+  st.mediaMinCount = Math.min(5, Math.max(1, Number(mc) || 2));
+  document.querySelectorAll('#mminseg button').forEach(b => b.classList.toggle('on', Number(b.dataset.mc) === st.mediaMinCount));
+  if (persist) { save(); if (viewMode === 'library') draw(); else if (isMediaStep(cur)) render(); else updateHeaderCounts(); }
+}
 
 function setPhoneticsMode(pm, persist = true) {
   st.phoneticsMode = pm === 'literal' ? 'literal' : 'real';
   window.AMBIENT_PHONETICS_MODE = st.phoneticsMode;
   document.querySelectorAll('#pseg button').forEach(b => b.classList.toggle('on', b.dataset.p === st.phoneticsMode));
-  if (persist) {
-    save();
-    render();
-  }
+  if (persist) { save(); render(); }
 }
-document.querySelectorAll('#pseg button').forEach(b => b.onclick = () => setPhoneticsMode(b.dataset.p));
 
 function setClueMode(cm, persist = true) {
   st.clueMode = cm === 'learn' ? 'learn' : 'mystery';
   document.querySelectorAll('#cseg button').forEach(b => b.classList.toggle('on', b.dataset.c === st.clueMode));
-  if (persist) {
-    save();
-    draw();
-  }
+  if (persist) { save(); draw(); }
 }
-document.querySelectorAll('#cseg button').forEach(b => b.onclick = () => setClueMode(b.dataset.c));
-
-function toggleTrophy(force) {
-  clearPendingNext();
-  viewMode = (force !== undefined ? (force ? 'trophy' : 'play') : (viewMode === 'trophy' ? 'play' : 'trophy'));
-  const tb = document.getElementById('trophbtn');
-  if (tb) tb.classList.toggle('on', viewMode === 'trophy');
-  draw();
-}
-const trophBtn = document.getElementById('trophbtn');
-if (trophBtn) trophBtn.onclick = () => toggleTrophy();
 
 function setMode(m, persist = true) {
   st.m = m === 'B' ? 'B' : 'A';
@@ -954,23 +741,19 @@ function setMode(m, persist = true) {
   document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.m === st.m));
   if (persist) save();
 }
-document.querySelectorAll('#seg button').forEach(b => b.onclick = () => setMode(b.dataset.m));
-
-function syncSoundUI() {
-  st.snd = normalizeSnd(st.snd);
-  document.querySelectorAll('#sseg button').forEach(b => b.classList.toggle('on', b.dataset.s === st.snd));
-}
 
 function setSoundMode(s, preview = false, persist = true) {
   st.snd = normalizeSnd(s);
-  syncSoundUI();
+  document.querySelectorAll('#sseg button').forEach(b => b.classList.toggle('on', b.dataset.s === st.snd));
   if (persist) save();
   if (preview) {
     if (st.snd === 'dings') ping();
-    else if (st.snd === 'voice') ping(cur && cur[0] === 'w' ? cur[1] : 'สวัสดี');
+    else if (st.snd === 'voice') {
+      if (cur && cur[0] === 'm') replayMediaAudio();
+      else ping(cur && cur[0] === 'w' ? cur[1] : 'สวัสดี');
+    }
   }
 }
-document.querySelectorAll('#sseg button').forEach(b => b.onclick = () => setSoundMode(b.dataset.s, true));
 
 function setFont(f, persist = true) {
   if (!FONTS[f] && f !== 'mix') f = 'modern';
@@ -979,26 +762,52 @@ function setFont(f, persist = true) {
   document.querySelectorAll('#fseg button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
   if (persist) save();
 }
+
+function syncAllUI() {
+  setTrackMode(st.trackMode, false);
+  setMixRatio(st.mixRatio, false);
+  setMediaStage(st.mediaStage, false);
+  setMediaMinCount(st.mediaMinCount, false);
+  setFont(st.f || 'modern', false);
+  setMode(st.m || 'A', false);
+  setSoundMode(st.snd || 'dings', false, false);
+  setPhoneticsMode(st.phoneticsMode || 'real', false);
+  setClueMode(st.clueMode || 'mystery', false);
+  syncViewButtons();
+}
+
+document.querySelectorAll('#trackseg button').forEach(b => b.onclick = () => setTrackMode(b.dataset.tr));
+document.querySelectorAll('#mixseg button').forEach(b => b.onclick = () => setMixRatio(b.dataset.mr));
+document.querySelectorAll('#mstageseg button').forEach(b => b.onclick = () => setMediaStage(b.dataset.ms));
+document.querySelectorAll('#mminseg button').forEach(b => b.onclick = () => setMediaMinCount(b.dataset.mc));
+document.querySelectorAll('#pseg button').forEach(b => b.onclick = () => setPhoneticsMode(b.dataset.p));
+document.querySelectorAll('#cseg button').forEach(b => b.onclick = () => setClueMode(b.dataset.c));
+document.querySelectorAll('#seg button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+document.querySelectorAll('#sseg button').forEach(b => b.onclick = () => setSoundMode(b.dataset.s, true));
 document.querySelectorAll('#fseg button').forEach(b => b.onclick = () => setFont(b.dataset.f));
 
-const fs = document.getElementById('fs'), D = document;
-if (fs) {
-  if (!(D.fullscreenEnabled || D.webkitFullscreenEnabled)) fs.style.display = 'none';
-  fs.onclick = () => {
+const trophBtn = document.getElementById('trophbtn');
+if (trophBtn) trophBtn.onclick = () => setViewMode('trophy');
+const libBtn = document.getElementById('libbtn');
+if (libBtn) libBtn.onclick = () => setViewMode('library');
+
+const fsBtn = document.getElementById('fs'), D = document;
+if (fsBtn) {
+  if (!(D.fullscreenEnabled || D.webkitFullscreenEnabled)) fsBtn.style.display = 'none';
+  fsBtn.onclick = () => {
     try {
       const on = D.fullscreenElement || D.webkitFullscreenElement, e = D.documentElement;
       const p = on ? (D.exitFullscreen || D.webkitExitFullscreen).call(D) : (e.requestFullscreen || e.webkitRequestFullscreen).call(e);
       if (p && p.catch) p.catch(() => {});
     } catch (x) {}
   };
-  const fsl = () => { fs.textContent = (D.fullscreenElement || D.webkitFullscreenElement) ? 'exit full screen' : 'full screen'; };
+  const fsl = () => { fsBtn.textContent = (D.fullscreenElement || D.webkitFullscreenElement) ? 'exit full screen' : 'full screen'; };
   D.addEventListener('fullscreenchange', fsl);
   D.addEventListener('webkitfullscreenchange', fsl);
 }
 
 const setBtn = document.getElementById('setbtn');
 const setPanel = document.getElementById('settings');
-
 function toggleSettings(force) {
   if (!setBtn || !setPanel) return;
   const open = force !== undefined ? !!force : setPanel.hidden;
@@ -1006,7 +815,6 @@ function toggleSettings(force) {
   setBtn.classList.toggle('on', open);
   setBtn.setAttribute('aria-expanded', String(open));
 }
-
 if (setBtn && setPanel) {
   setBtn.onclick = e => { e.stopPropagation(); toggleSettings(); };
   document.addEventListener('pointerdown', e => {
@@ -1014,25 +822,20 @@ if (setBtn && setPanel) {
     if (setPanel.contains(e.target) || setBtn.contains(e.target)) return;
     toggleSettings(false);
   });
-  addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !setPanel.hidden) toggleSettings(false);
-  });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !setPanel.hidden) toggleSettings(false); });
 }
 
 const replayTutBtn = document.getElementById('replaytut');
 if (replayTutBtn) {
   replayTutBtn.onclick = () => {
     st.i = 0;
+    st.trackMode = 'thai';
     save();
     toggleSettings(false);
-    if (viewMode === 'trophy') toggleTrophy(false);
-    else render();
+    syncAllUI();
+    setViewMode('play');
   };
 }
 
-setFont(st.f || 'modern', false);
-setMode(st.m || 'A', false);
-setSoundMode(st.snd || 'dings', false, false);
-setPhoneticsMode(st.phoneticsMode || 'real', false);
-setClueMode(st.clueMode || 'mystery', false);
+syncAllUI();
 render();

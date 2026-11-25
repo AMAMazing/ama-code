@@ -1,12 +1,16 @@
 {
-  "syncedAt": "2026-11-22T09:09:47.040Z",
+  "syncedAt": "2026-11-25T12:33:17.111Z",
   "sourceCommit": "5c9982f92ff7526a10dcada3c63115abae21ef6d",
   "files": [
     "app.js",
     "emojis.js",
+    "media-engine.js",
+    "media.css",
     "phonetics.js",
     "style.css",
     "sync.js",
+    "thai-coach.js",
+    "trancy-parser.js",
     "tutorial.js"
   ]
 }

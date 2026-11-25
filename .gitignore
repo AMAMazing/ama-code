@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-standalone
+.env
+*.vsix
+.DS_Store
+ambientlearning

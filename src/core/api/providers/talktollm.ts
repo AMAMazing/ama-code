@@ -9,7 +9,7 @@ import { Logger } from "@/shared/services/Logger"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
-import { UNIFIED_RULES_CONTENT } from "./unifiedRules"
+import { getUnifiedRules } from "./unifiedRulesLoader"
 
 export const TALKTOLM_BASE_URL_MARKER = "talktollm://local"
 export const NTFY_TOPIC_HEADER = "x-clinex-ntfy-topic"
@@ -145,7 +145,7 @@ def main():
 
     sys.stdout.write("\\n<<<TALKTOLM_RESPONSE_START>>>\\n")
     sys.stdout.write(response)
-    sys.stdout.write("\\n<<<TALKTOLM_RESPONSE_END>>>\\n")
+    sys.stdout.write("\\n<<<TALKTOLM_RESPONSE_" + "END>>>\\n")
     sys.stdout.flush()
 
 if __name__ == "__main__":
@@ -284,13 +284,14 @@ export class TalkToLlmHandler implements ApiHandler {
 			...convertToOpenAiMessages(messages),
 		]
 
+		const unifiedRules = await getUnifiedRules()
 		const pythonExe = this.resolvePythonExecutable()
 		const payload = JSON.stringify({
 			model: modelId,
 			messages: openAiMessages,
 			ntfy_topic: ntfyTopic,
 			ntfy_level: ntfyLevel,
-			unified_rules: UNIFIED_RULES_CONTENT,
+			unified_rules: unifiedRules,
 		})
 
 		let proc: ChildProcess | undefined
@@ -326,7 +327,7 @@ export class TalkToLlmHandler implements ApiHandler {
 						TalkToLlmHandler.activeProcesses.delete(proc)
 					}
 					const startMarker = "<<<TALKTOLM_RESPONSE_START>>>"
-					const endMarker = "<<<TALKTOLM_RESPONSE_END>>>"
+					const endMarker = "<<<TALKTOLM_RESPONSE_" + "END>>>"
 					const startIdx = stdoutBuf.indexOf(startMarker)
 					const endIdx = stdoutBuf.indexOf(endMarker)
 

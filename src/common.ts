@@ -4,6 +4,7 @@ import "./utils/path" // necessary to have access to String.prototype.toPosix
 import { HostProvider } from "@/hosts/host-provider"
 import { Logger } from "@/shared/services/Logger"
 import type { StorageContext } from "@/shared/storage/storage-context"
+import { warmUpUnifiedRules } from "./core/api/providers/unifiedRulesLoader"
 import { FileContextTracker } from "./core/context/context-tracking/FileContextTracker"
 import { clearOnboardingModelsCache } from "./core/controller/models/getClineOnboardingModels"
 import { HookDiscoveryCache } from "./core/hooks/HookDiscoveryCache"
@@ -69,6 +70,8 @@ export async function initialize(storageContext: StorageContext): Promise<Webvie
 	await checkWorktreeAutoOpen(stateManager)
 
 	// =============== Background sync and cleanup tasks ===============
+	// Warm up remote unified rules cache in the background (non-blocking)
+	void warmUpUnifiedRules()
 	// Use remote config blobStoreConfig if available, otherwise fall back to env vars
 	const blobStoreSettings = stateManager.getRemoteConfigSettings()?.blobStoreConfig ?? getBlobStoreSettingsFromEnv()
 	syncWorker().init({ ...blobStoreSettings, userDistinctId: getDistinctId() })

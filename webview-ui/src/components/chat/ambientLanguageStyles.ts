@@ -38,7 +38,7 @@ export const SIDEBAR_OVERRIDE_CSS = `
 
     /* Slim Companion Website Header tuned for VS Code sidebar width */
     #bar.hdr2 {
-      gap: 6px;
+      gap: 5px;
       font-size: 11px;
       flex-wrap: nowrap;
       min-height: 28px;
@@ -46,7 +46,7 @@ export const SIDEBAR_OVERRIDE_CSS = `
 
     #bar.hdr2 .l {
       min-width: 0;
-      gap: 6px;
+      gap: 5px;
       overflow: hidden;
     }
 
@@ -54,6 +54,11 @@ export const SIDEBAR_OVERRIDE_CSS = `
       font-size: 12px;
       font-weight: 600;
       letter-spacing: -0.02em;
+    }
+
+    #bar.hdr2 #trackseg button {
+      padding: 3px 6px;
+      font-size: 11px;
     }
 
     #bar.hdr2 #cnt {
@@ -64,26 +69,29 @@ export const SIDEBAR_OVERRIDE_CSS = `
     }
 
     #bar.hdr2 .r {
-      gap: 5px;
+      gap: 4px;
     }
 
+    #bar.hdr2 #libbtn,
     #bar.hdr2 #trophbtn,
     #bar.hdr2 #setbtn {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 4px 8px;
+      padding: 4px 7px;
       font-size: 11px;
       line-height: 1.2;
       color: var(--tx);
       transition: border-color 0.15s, background 0.15s, color 0.15s;
     }
 
+    #bar.hdr2 #libbtn:hover,
     #bar.hdr2 #trophbtn:hover,
     #bar.hdr2 #setbtn:hover {
       border-color: var(--acc);
     }
 
+    #bar.hdr2 #libbtn.on,
     #bar.hdr2 #trophbtn.on,
     #bar.hdr2 #setbtn.on {
       background: #162230;
@@ -95,13 +103,13 @@ export const SIDEBAR_OVERRIDE_CSS = `
       display: none;
     }
 
-    @media (min-width: 370px) {
+    @media (min-width: 390px) {
       #bar.hdr2 #setbtn .lbl {
         display: inline;
       }
     }
 
-    /* Settings Popover (Reading, Clues, Script, Sound, Replay Tutorial) */
+    /* Settings Popover */
     #settings {
       top: calc(100% + 6px);
       left: 0;
@@ -254,6 +262,56 @@ export const SIDEBAR_OVERRIDE_CSS = `
       color: var(--tx);
     }
 
+    /* Compact Media Comprehension Cards & Trancy Importer for Sidebar */
+    .m-wrap {
+      gap: 8px;
+    }
+
+    .m-term {
+      font-size: clamp(20px, 6vh, 32px);
+    }
+
+    .m-cloze {
+      font-size: 12px;
+      padding: 6px 9px;
+    }
+
+    .m-listen-btn {
+      padding: 10px 14px;
+      font-size: 12px;
+    }
+
+    .m-choices {
+      gap: 6px;
+    }
+
+    .m-choice {
+      padding: 7px 9px;
+      font-size: 11.5px;
+      border-radius: 8px;
+    }
+
+    .m-num {
+      width: 18px;
+      height: 18px;
+      font-size: 10px;
+    }
+
+    .m-ex {
+      padding: 6px 9px;
+      font-size: 11px;
+    }
+
+    .lib-import {
+      padding: 7px;
+      gap: 5px;
+    }
+
+    .lib-item {
+      padding: 5px 8px;
+      font-size: 11px;
+    }
+
     /* Compact Virtual Keyboard tailored for narrow VS Code sidebars */
     #kb,
     body.B #kb {
@@ -287,7 +345,7 @@ export const SIDEBAR_OVERRIDE_CSS = `
       background: #1c445d;
     }
 
-    /* Emoji Trophy Case tuned for VS Code sidebar */
+    /* Emoji Trophy Case & Media Library tuned for VS Code sidebar */
     #stage.trophy-mode {
       padding: 10px;
       gap: 8px;

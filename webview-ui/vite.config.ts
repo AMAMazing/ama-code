@@ -46,10 +46,14 @@ const readAmbientCoreBundle = () => {
 
 	return {
 		styleCss: readAsset("style.css"),
+		mediaCss: readAsset("media.css"),
 		phoneticsJs: readAsset("phonetics.js"),
 		tutorialJs: readAsset("tutorial.js"),
 		emojisJs: readAsset("emojis.js"),
 		syncJs: readAsset("sync.js"),
+		thaiCoachJs: readAsset("thai-coach.js"),
+		trancyParserJs: readAsset("trancy-parser.js"),
+		mediaEngineJs: readAsset("media-engine.js"),
 		appJs: readAsset("app.js"),
 	}
 }
