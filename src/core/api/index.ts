@@ -3,14 +3,7 @@ import { Mode } from "@shared/storage/types"
 import { ClineStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
 import { ClineTool } from "@/shared/tools"
-import {
-	MANUAL_AUTOCOPY_HEADER,
-	MANUAL_BRIDGE_PORT_HEADER,
-	MANUAL_BROWSER_BRIDGE_HEADER,
-	MANUAL_MODE_BASE_URL_MARKER,
-	MANUAL_UNIFIED_RULES_HEADER,
-	ManualModeHandler,
-} from "./providers/manual"
+import { MANUAL_MODE_BASE_URL_MARKER, ManualModeHandler } from "./providers/manual"
 import { OpenAiHandler } from "./providers/openai"
 import {
 	dispatchNtfyForResponse,
@@ -111,10 +104,6 @@ function createHandlerForProvider(
 	const cleanHeaders = { ...(options.openAiHeaders || {}) }
 	delete cleanHeaders[NTFY_TOPIC_HEADER]
 	delete cleanHeaders[NTFY_LEVEL_HEADER]
-	delete cleanHeaders[MANUAL_AUTOCOPY_HEADER]
-	delete cleanHeaders[MANUAL_UNIFIED_RULES_HEADER]
-	delete cleanHeaders[MANUAL_BROWSER_BRIDGE_HEADER]
-	delete cleanHeaders[MANUAL_BRIDGE_PORT_HEADER]
 
 	const openAiHandler = new OpenAiHandler({
 		onRetryAttempt: options.onRetryAttempt,

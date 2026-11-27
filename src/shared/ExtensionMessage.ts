@@ -17,10 +17,20 @@ import { OnboardingModelGroup } from "./proto/cline/state"
 import { Mode } from "./storage/types"
 import { TelemetrySetting } from "./TelemetrySetting"
 import { UserInfo } from "./UserInfo"
+
+export interface ManualModeState {
+	waiting: boolean
+	hasPrompt: boolean
+	version: number
+	queuedTools: number
+	error?: string
+}
+
 // webview will hold state
 export interface ExtensionMessage {
-	type: "grpc_response" // New type for gRPC responses
+	type: "grpc_response" | "manual_mode_state"
 	grpc_response?: GrpcResponse
+	manualModeState?: ManualModeState
 }
 
 export type GrpcResponse = {

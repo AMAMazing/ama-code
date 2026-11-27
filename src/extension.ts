@@ -525,13 +525,6 @@ ${ctx.cellJson || "{}"}
 		}),
 	)
 
-	// Register Manual Mode panel command
-	context.subscriptions.push(
-		vscode.commands.registerCommand("ama-code.openManualModePanel", () => {
-			ManualModeHandler.openPanel()
-		}),
-	)
-
 	// Listen for secrets changes (e.g., cross-window login/logout sync)
 	const unsubSecrets = storageContext.secrets.onDidChange((event) => {
 		if (event.key === "cline:clineAccountId") {
@@ -703,7 +696,7 @@ export async function deactivate() {
 	// Dispose Non-VSCode-specific services
 	tearDown()
 
-	// Dispose Manual Mode panel and optional local HTTP bridge
+	// Dispose Manual Mode state
 	ManualModeHandler.disposeAll()
 
 	// VSCode-specific services

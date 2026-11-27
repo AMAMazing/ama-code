@@ -2,7 +2,7 @@
 	"name": "ama-code",
 	"displayName": "AMA Code",
 	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
-	"version": "1.30.0",
+	"version": "1.31.0",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.84.0"
@@ -216,11 +216,6 @@
 			{
 				"command": "ama-code.reconstructTaskHistory",
 				"title": "Reconstruct Task History",
-				"category": "AMA Code"
-			},
-			{
-				"command": "ama-code.openManualModePanel",
-				"title": "Open Manual Mode Panel",
 				"category": "AMA Code"
 			},
 			{

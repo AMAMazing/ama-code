@@ -1,4 +1,3 @@
-
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineErrorRetryMessages } from "@shared/combineErrorRetryMessages"
@@ -7,6 +6,7 @@ import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
 import { useCallback, useEffect, useMemo } from "react"
 import { useMount } from "react-use"
+import { MANUAL_MODE_BASE_URL_MARKER } from "@/components/settings/ApiOptions"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useShowNavbar } from "@/context/PlatformContext"
@@ -31,6 +31,7 @@ import {
 	useScrollBehavior,
 	WelcomeSection,
 } from "./chat-view"
+import { ManualModeCopyBar, ManualModePasteInput, useManualModeState } from "./ManualModeControls"
 
 interface ChatViewProps {
 	isHidden: boolean
@@ -59,6 +60,9 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	} = useExtensionState()
 	const isProdHostedApp = userInfo?.apiBaseUrl === "https://app.cline.bot"
 	const shouldShowQuickWins = isProdHostedApp && (!taskHistory || taskHistory.length < QUICK_WINS_HISTORY_THRESHOLD)
+	const isManualMode = apiConfiguration?.openAiBaseUrl === MANUAL_MODE_BASE_URL_MARKER
+	const manualMode = useManualModeState(isManualMode)
+	const isManualModeWaiting = isManualMode && manualMode.state.waiting
 
 	//const task = messages.length > 0 ? (messages[0].say === "task" ? messages[0] : undefined) : undefined) : undefined
 	const task = useMemo(() => messages.at(0), [messages]) // leaving this less safe version here since if the first message is not a task, then the extension is in a bad state and needs to be debugged (see Cline.abort)
@@ -314,14 +318,14 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
-			if (!isHidden && !sendingDisabled && !enableButtons) {
+			if (!isHidden && !sendingDisabled && !enableButtons && !isManualModeWaiting) {
 				textAreaRef.current?.focus()
 			}
 		}, 50)
 		return () => {
 			clearTimeout(timer)
 		}
-	}, [isHidden, sendingDisabled, enableButtons])
+	}, [isHidden, sendingDisabled, enableButtons, isManualModeWaiting])
 
 	const visibleMessages = useMemo(() => {
 		return filterVisibleMessages(modifiedMessages)
@@ -400,9 +404,17 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 			</div>
 			<footer className="bg-(--vscode-sidebar-background)" style={{ gridRow: "2" }}>
 				<AmbientLanguagePanel isAgentWaiting={isAgentWaiting} />
+				{isManualMode && task && manualMode.state.hasPrompt && !isManualModeWaiting && (
+					<ManualModeCopyBar
+						justCopied={manualMode.justCopied}
+						onCopyPrompt={manualMode.copyPrompt}
+						queuedTools={manualMode.state.queuedTools}
+					/>
+				)}
 				<AutoApproveBar />
 				<ActionButtons
 					chatState={chatState}
+					hideCancelButton={isManualModeWaiting}
 					messageHandlers={messageHandlers}
 					messages={messages}
 					mode={mode}
@@ -414,14 +426,28 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 					}}
 					task={task}
 				/>
-				<InputSection
-					chatState={chatState}
-					messageHandlers={messageHandlers}
-					placeholderText={placeholderText}
-					scrollBehavior={scrollBehavior}
-					selectFilesAndImages={selectFilesAndImages}
-					shouldDisableFilesAndImages={shouldDisableFilesAndImages}
-				/>
+				{isManualModeWaiting ? (
+					<ManualModePasteInput
+						error={manualMode.state.error}
+						hasPrompt={manualMode.state.hasPrompt}
+						justCopied={manualMode.justCopied}
+						onCancel={() => {
+							void messageHandlers.executeButtonAction("cancel")
+						}}
+						onCopyPrompt={manualMode.copyPrompt}
+						onPasteResponse={manualMode.pasteResponse}
+						queuedTools={manualMode.state.queuedTools}
+					/>
+				) : (
+					<InputSection
+						chatState={chatState}
+						messageHandlers={messageHandlers}
+						placeholderText={placeholderText}
+						scrollBehavior={scrollBehavior}
+						selectFilesAndImages={selectFilesAndImages}
+						shouldDisableFilesAndImages={shouldDisableFilesAndImages}
+					/>
+				)}
 			</footer>
 		</ChatLayout>
 	)

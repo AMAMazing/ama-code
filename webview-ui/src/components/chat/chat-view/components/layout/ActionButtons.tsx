@@ -13,6 +13,7 @@ interface ActionButtonsProps {
 	chatState: ChatState
 	messageHandlers: MessageHandlers
 	mode: Mode
+	hideCancelButton?: boolean
 	scrollBehavior: {
 		scrollToBottomSmooth: () => void
 		disableAutoScrollRef: React.MutableRefObject<boolean>
@@ -30,6 +31,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	chatState,
 	mode,
 	messageHandlers,
+	hideCancelButton,
 	scrollBehavior,
 }) => {
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
@@ -101,7 +103,8 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({
 	const { showScrollToBottom, scrollToBottomSmooth, disableAutoScrollRef } = scrollBehavior
 
 	const { primaryText, secondaryText, primaryAction, secondaryAction, enableButtons } = buttonConfig
-	const hasButtons = primaryText || secondaryText
+	const isCancelOnlyHidden = Boolean(hideCancelButton && !primaryText && secondaryAction === "cancel")
+	const hasButtons = !isCancelOnlyHidden && Boolean(primaryText || secondaryText)
 	const isStreaming = task.partial === true
 	const canInteract = enableButtons && !isProcessing
 

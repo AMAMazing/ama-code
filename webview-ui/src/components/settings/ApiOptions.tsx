@@ -1,5 +1,4 @@
 import { Mode } from "@shared/storage/types"
-import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { useEffect } from "react"
 import styled from "styled-components"
 import { normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
@@ -10,11 +9,6 @@ import { useApiConfigurationHandlers } from "./utils/useApiConfigurationHandlers
 
 export const TALKTOLM_BASE_URL_MARKER = "talktollm://local"
 export const MANUAL_MODE_BASE_URL_MARKER = "manual://local"
-
-const MANUAL_AUTOCOPY_HEADER = "x-amacs-manual-autocopy"
-const MANUAL_UNIFIED_RULES_HEADER = "x-amacs-manual-unified-rules"
-const MANUAL_BROWSER_BRIDGE_HEADER = "x-amacs-manual-browser-bridge"
-const MANUAL_BRIDGE_PORT_HEADER = "x-amacs-manual-bridge-port"
 
 type ProviderMode = "openai" | "talktollm" | "manual"
 
@@ -170,45 +164,6 @@ const StyledSelect = styled.select`
 	}
 `
 
-const ManualCard = styled.div`
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	padding: 10px;
-	border-radius: 4px;
-	border: 1px solid var(--vscode-dropdown-border);
-	background: var(--vscode-input-background);
-`
-
-const ManualHint = styled.p`
-	margin: 0;
-	font-size: 11px;
-	line-height: 1.45;
-	color: var(--vscode-descriptionForeground);
-`
-
-const PortRow = styled.div`
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-top: 2px;
-`
-
-const PortInput = styled.input`
-	width: 96px;
-	padding: 4px 8px;
-	border-radius: 4px;
-	font-size: 12px;
-	background-color: var(--vscode-editor-background);
-	color: var(--vscode-input-foreground);
-	border: 1px solid var(--vscode-dropdown-border);
-
-	&:focus-visible {
-		outline: 1px solid var(--vscode-focusBorder);
-		border-color: var(--vscode-focusBorder);
-	}
-`
-
 declare module "vscode" {
 	interface LanguageModelChatSelector {
 		vendor?: string
@@ -236,12 +191,6 @@ const ApiOptions = ({
 	const currentModel =
 		(currentMode === "plan" ? apiConfiguration?.planModeOpenAiModelId : apiConfiguration?.actModeOpenAiModelId) || "gemini"
 	const isAiStudioModel = AISTUDIO_ALL_IDS.has(currentModel)
-
-	const manualHeaders = apiConfiguration?.openAiHeaders || {}
-	const manualAutoCopy = manualHeaders[MANUAL_AUTOCOPY_HEADER] !== "false"
-	const manualIncludeUnifiedRules = manualHeaders[MANUAL_UNIFIED_RULES_HEADER] !== "false"
-	const manualBrowserBridge = manualHeaders[MANUAL_BROWSER_BRIDGE_HEADER] === "true"
-	const manualBridgePort = manualHeaders[MANUAL_BRIDGE_PORT_HEADER] || "4000"
 
 	useEffect(() => {
 		if (selectedProvider !== "openai") {
@@ -303,15 +252,6 @@ const ApiOptions = ({
 		})
 	}
 
-	const updateManualHeader = async (key: string, value: string) => {
-		await handleFieldsChange({
-			openAiHeaders: {
-				...(apiConfiguration?.openAiHeaders || {}),
-				[key]: value,
-			},
-		})
-	}
-
 	const activeAiStudioValue =
 		AISTUDIO_SUBMODELS.find((m) => m.aliases.includes(currentModel))?.value || "aistudio-carbon"
 
@@ -359,7 +299,7 @@ const ApiOptions = ({
 						<RadioDot $active={activeProviderMode === "manual"} />
 						<OptionText>
 							<OptionTitle>Manual Mode</OptionTitle>
-							<OptionHint>Copy prompts to any LLM chat & paste XML responses back</OptionHint>
+							<OptionHint>Copy prompts and paste clipboard responses directly in chat</OptionHint>
 						</OptionText>
 					</OptionRow>
 				</OptionList>
@@ -407,62 +347,7 @@ const ApiOptions = ({
 						</div>
 					)}
 				</div>
-			) : isManualMode ? (
-				<ManualCard>
-					<ManualHint>
-						When a task runs, AMA Code compiles the full conversation prompt, opens the built-in{" "}
-						<strong>Manual Mode</strong> panel inside VS Code, and lets you copy prompts and send back single or
-						batched multi-tool XML responses with one click.
-					</ManualHint>
-
-					<VSCodeCheckbox
-						checked={manualAutoCopy}
-						onChange={async (e: any) => {
-							await updateManualHeader(MANUAL_AUTOCOPY_HEADER, e.target.checked === true ? "true" : "false")
-						}}>
-						Auto-copy compiled prompt to clipboard
-					</VSCodeCheckbox>
-
-					<VSCodeCheckbox
-						checked={manualIncludeUnifiedRules}
-						onChange={async (e: any) => {
-							await updateManualHeader(MANUAL_UNIFIED_RULES_HEADER, e.target.checked === true ? "true" : "false")
-						}}>
-						Append unified-rules.md multi-tool protocol
-					</VSCodeCheckbox>
-
-					<div>
-						<VSCodeCheckbox
-							checked={manualBrowserBridge}
-							onChange={async (e: any) => {
-								await updateManualHeader(MANUAL_BROWSER_BRIDGE_HEADER, e.target.checked === true ? "true" : "false")
-							}}>
-							Also run local browser control panel (HTTP)
-						</VSCodeCheckbox>
-
-						{manualBrowserBridge && (
-							<PortRow>
-								<label
-									htmlFor="manual-bridge-port"
-									style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)" }}>
-									Localhost port:
-								</label>
-								<PortInput
-									id="manual-bridge-port"
-									max={65535}
-									min={1024}
-									onChange={(e) => updateManualHeader(MANUAL_BRIDGE_PORT_HEADER, e.target.value)}
-									type="number"
-									value={manualBridgePort}
-								/>
-								<span style={{ fontSize: 11, color: "var(--vscode-descriptionForeground)" }}>
-									http://127.0.0.1:{manualBridgePort || "4000"}
-								</span>
-							</PortRow>
-						)}
-					</div>
-				</ManualCard>
-			) : (
+			) : isManualMode ? null : (
 				<>
 					{apiConfiguration && (
 						<OpenAICompatibleProvider

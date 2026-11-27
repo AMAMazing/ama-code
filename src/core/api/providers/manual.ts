@@ -1,19 +1,15 @@
 import { ModelInfo, openAiModelInfoSaneDefaults } from "@shared/api"
+import type { ManualModeState } from "@shared/ExtensionMessage"
 import { ClineStorageMessage } from "@/shared/messages/content"
 import { Logger } from "@/shared/services/Logger"
-import { writeTextToClipboard } from "@/utils/env"
+import { readTextFromClipboard, writeTextToClipboard } from "@/utils/env"
 import { ApiHandler, CommonApiHandlerOptions } from "../index"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
-import { ManualModePanelController, ManualModeSnapshot } from "./manualPanel"
 import { dispatchNtfyForResponse, NTFY_LEVEL_HEADER, normalizeTalkToLlmLineEndings } from "./talktollm"
 import { getUnifiedRules } from "./unifiedRulesLoader"
 
 export const MANUAL_MODE_BASE_URL_MARKER = "manual://local"
-export const MANUAL_AUTOCOPY_HEADER = "x-amacs-manual-autocopy"
-export const MANUAL_UNIFIED_RULES_HEADER = "x-amacs-manual-unified-rules"
-export const MANUAL_BROWSER_BRIDGE_HEADER = "x-amacs-manual-browser-bridge"
-export const MANUAL_BRIDGE_PORT_HEADER = "x-amacs-manual-bridge-port"
 
 const FENCE = String.fromCharCode(96).repeat(3)
 
@@ -66,7 +62,6 @@ function extractMessageText(content: unknown): string {
 
 export async function formatMessagesToManualPrompt(
 	openAiMessages: Array<{ role: string; content?: unknown }>,
-	includeUnifiedRules: boolean,
 ): Promise<string> {
 	const sections: string[] = []
 
@@ -79,13 +74,11 @@ export async function formatMessagesToManualPrompt(
 		)
 	}
 
-	if (includeUnifiedRules) {
-		const rulesText = await getUnifiedRules()
-		if (rulesText) {
-			sections.push(
-				`================================================================================\n[CRITICAL OUTPUT PROTOCOL & OVERRIDE INSTRUCTIONS]\n================================================================================\n${rulesText}`,
-			)
-		}
+	const rulesText = await getUnifiedRules()
+	if (rulesText) {
+		sections.push(
+			`================================================================================\n[CRITICAL OUTPUT PROTOCOL & OVERRIDE INSTRUCTIONS]\n================================================================================\n${rulesText}`,
+		)
 	}
 
 	return sections.join("\n\n")
@@ -139,90 +132,136 @@ export class ManualModeHandler implements ApiHandler {
 	private static latestCompiledPrompt = ""
 	private static promptVersion = 0
 	private static toolBatchQueue: string[] = []
-	private static lastAutoCopied = false
-	private static statusNote = "Ready. Send a task in AMA Code to compile a prompt."
-	private static panelController: ManualModePanelController | null = null
+	private static lastError: string | undefined = undefined
+	private static stateChangeListener: ((state: ManualModeState) => void) | null = null
 
 	constructor(options: ManualModeHandlerOptions) {
 		this.options = options
 	}
 
-	private static getPanelController(): ManualModePanelController {
-		if (!ManualModeHandler.panelController) {
-			ManualModeHandler.panelController = new ManualModePanelController({
-				getSnapshot: () => ManualModeHandler.getSnapshot(),
-				submitResponse: (rawText) => ManualModeHandler.submitResponse(rawText),
-				clearQueue: () => ManualModeHandler.clearQueue(),
-				cancelPending: (reason) => ManualModeHandler.cancelPending(reason),
-			})
+	public static setStateChangeListener(listener: ((state: ManualModeState) => void) | null): void {
+		ManualModeHandler.stateChangeListener = listener
+		if (listener) {
+			ManualModeHandler.notifyStateChange()
 		}
-		return ManualModeHandler.panelController
 	}
 
-	public static getSnapshot(): ManualModeSnapshot {
+	public static getState(): ManualModeState {
 		return {
 			waiting: Boolean(ManualModeHandler.pendingResolver),
+			hasPrompt: Boolean(ManualModeHandler.latestCompiledPrompt),
 			version: ManualModeHandler.promptVersion,
-			prompt: ManualModeHandler.latestCompiledPrompt,
-			promptChars: ManualModeHandler.latestCompiledPrompt.length,
 			queuedTools: ManualModeHandler.toolBatchQueue.length,
-			autoCopied: ManualModeHandler.lastAutoCopied,
-			statusNote: ManualModeHandler.statusNote,
-			bridgeUrl: ManualModeHandler.panelController?.getBridgeUrl() || null,
+			error: ManualModeHandler.lastError,
 		}
 	}
 
-	public static openPanel(): void {
-		ManualModeHandler.getPanelController().showPanel(false)
+	private static notifyStateChange(): void {
+		try {
+			ManualModeHandler.stateChangeListener?.(ManualModeHandler.getState())
+		} catch (err) {
+			Logger.warn(`[AMA Code Manual Mode] Failed to push state update: ${err}`)
+		}
 	}
 
-	public static clearQueue(): void {
+	public static resetState(): void {
+		const reject = ManualModeHandler.pendingRejecter
+		ManualModeHandler.pendingResolver = null
+		ManualModeHandler.pendingRejecter = null
 		ManualModeHandler.toolBatchQueue = []
-		ManualModeHandler.statusNote = "Cleared queued batched tool calls."
-		ManualModeHandler.panelController?.pushState()
+		ManualModeHandler.latestCompiledPrompt = ""
+		ManualModeHandler.lastError = undefined
+		ManualModeHandler.notifyStateChange()
+		if (reject) {
+			reject(new Error("Manual Mode task cleared."))
+		}
 	}
 
 	public static cancelPending(reason = "Manual Mode request cancelled."): void {
 		ManualModeHandler.toolBatchQueue = []
+		ManualModeHandler.lastError = undefined
 		const reject = ManualModeHandler.pendingRejecter
 		ManualModeHandler.pendingResolver = null
 		ManualModeHandler.pendingRejecter = null
-		ManualModeHandler.statusNote = reason
-		ManualModeHandler.panelController?.pushState()
+		ManualModeHandler.notifyStateChange()
 		if (reject) {
 			reject(new Error(reason))
 		}
 	}
 
+	public static async copyLatestPromptToClipboard(): Promise<boolean> {
+		if (!ManualModeHandler.latestCompiledPrompt) {
+			ManualModeHandler.lastError = "No compiled prompt available yet."
+			ManualModeHandler.notifyStateChange()
+			return false
+		}
+		try {
+			await writeTextToClipboard(ManualModeHandler.latestCompiledPrompt)
+			ManualModeHandler.lastError = undefined
+			ManualModeHandler.notifyStateChange()
+			return true
+		} catch (err) {
+			ManualModeHandler.lastError = `Failed to copy prompt: ${err instanceof Error ? err.message : String(err)}`
+			ManualModeHandler.notifyStateChange()
+			return false
+		}
+	}
+
+	public static async pasteAndSubmitFromClipboard(): Promise<{ ok: boolean; batchCount?: number; error?: string }> {
+		if (!ManualModeHandler.pendingResolver) {
+			const error = "Not currently waiting for a response."
+			ManualModeHandler.lastError = error
+			ManualModeHandler.notifyStateChange()
+			return { ok: false, error }
+		}
+
+		let clipText = ""
+		try {
+			clipText = await readTextFromClipboard()
+		} catch (err) {
+			const error = `Failed to read clipboard: ${err instanceof Error ? err.message : String(err)}`
+			ManualModeHandler.lastError = error
+			ManualModeHandler.notifyStateChange()
+			return { ok: false, error }
+		}
+
+		if (!clipText || !clipText.trim()) {
+			const error = "Clipboard is empty. Copy the LLM response first."
+			ManualModeHandler.lastError = error
+			ManualModeHandler.notifyStateChange()
+			return { ok: false, error }
+		}
+
+		return ManualModeHandler.submitResponse(clipText)
+	}
+
 	public static submitResponse(rawText: string): { ok: boolean; batchCount?: number; error?: string } {
 		if (!ManualModeHandler.pendingResolver) {
-			return { ok: false, error: "AMA Code is not currently waiting for a manual response." }
+			return { ok: false, error: "Not currently waiting for a response." }
 		}
 		if (!rawText || !rawText.trim()) {
-			return { ok: false, error: "Response text is empty." }
+			ManualModeHandler.lastError = "Clipboard is empty. Copy the LLM response first."
+			ManualModeHandler.notifyStateChange()
+			return { ok: false, error: ManualModeHandler.lastError }
 		}
 
 		const steps = parseAndQueueLLMResponse(rawText)
 		const firstStep = steps.shift() || ""
 		ManualModeHandler.toolBatchQueue = steps
+		ManualModeHandler.lastError = undefined
 
 		const resolve = ManualModeHandler.pendingResolver
 		ManualModeHandler.pendingResolver = null
 		ManualModeHandler.pendingRejecter = null
-		ManualModeHandler.statusNote =
-			steps.length > 0
-				? `Sent response to AMA Code (${steps.length} follow-up tool call(s) queued).`
-				: "Sent response to AMA Code."
-		ManualModeHandler.panelController?.pushState()
+		ManualModeHandler.notifyStateChange()
 
 		resolve(firstStep)
 		return { ok: true, batchCount: steps.length + 1 }
 	}
 
 	public static disposeAll(): void {
-		ManualModeHandler.cancelPending("AMA Code deactivated.")
-		ManualModeHandler.panelController?.dispose()
-		ManualModeHandler.panelController = null
+		ManualModeHandler.resetState()
+		ManualModeHandler.stateChangeListener = null
 	}
 
 	abort(): void {
@@ -231,14 +270,7 @@ export class ManualModeHandler implements ApiHandler {
 
 	async *createMessage(systemPrompt: string, messages: ClineStorageMessage[]): ApiStream {
 		const headers = this.options.headers || {}
-		const autoCopy = headers[MANUAL_AUTOCOPY_HEADER] !== "false"
-		const includeUnifiedRules = headers[MANUAL_UNIFIED_RULES_HEADER] !== "false"
-		const enableBrowserBridge = headers[MANUAL_BROWSER_BRIDGE_HEADER] === "true"
-		const bridgePort = Number.parseInt(headers[MANUAL_BRIDGE_PORT_HEADER] || "4000", 10)
 		const ntfyLevel = (headers[NTFY_LEVEL_HEADER] || "none").toLowerCase()
-
-		const panelController = ManualModeHandler.getPanelController()
-		panelController.ensureHttpBridge(enableBrowserBridge, bridgePort)
 
 		let effectiveSystemPrompt = systemPrompt
 		if (ntfyLevel === "all") {
@@ -260,8 +292,8 @@ export class ManualModeHandler implements ApiHandler {
 
 		if (ManualModeHandler.toolBatchQueue.length > 0 && !hasError) {
 			const nextToolXml = ManualModeHandler.toolBatchQueue.shift() || ""
-			ManualModeHandler.statusNote = `Auto-sent queued tool (${ManualModeHandler.toolBatchQueue.length} remaining in batch).`
-			panelController.pushState()
+			ManualModeHandler.lastError = undefined
+			ManualModeHandler.notifyStateChange()
 
 			const normalized = normalizeTalkToLlmLineEndings(nextToolXml)
 			await dispatchNtfyForResponse(normalized, this.options.headers)
@@ -292,32 +324,21 @@ export class ManualModeHandler implements ApiHandler {
 			ManualModeHandler.pendingRejecter = null
 		}
 
-		const compiledPrompt = await formatMessagesToManualPrompt(openAiMessages, includeUnifiedRules)
+		const compiledPrompt = await formatMessagesToManualPrompt(openAiMessages)
 		ManualModeHandler.latestCompiledPrompt = compiledPrompt
 		ManualModeHandler.promptVersion += 1
+		ManualModeHandler.lastError = undefined
 
-		let copied = false
-		if (autoCopy) {
-			try {
-				await writeTextToClipboard(compiledPrompt)
-				copied = true
-			} catch (err) {
-				Logger.warn(`[AMA Code Manual Mode] Failed to auto-copy prompt to clipboard: ${err}`)
-			}
+		try {
+			await writeTextToClipboard(compiledPrompt)
+		} catch (err) {
+			Logger.warn(`[AMA Code Manual Mode] Failed to auto-copy prompt to clipboard: ${err}`)
 		}
-
-		ManualModeHandler.lastAutoCopied = copied
-		ManualModeHandler.statusNote = copied
-			? `✅ Prompt #${ManualModeHandler.promptVersion} compiled & auto-copied to clipboard! Paste into your LLM, copy its reply, and click Paste Clipboard & Send.`
-			: `📥 Prompt #${ManualModeHandler.promptVersion} ready! Click Copy Full Prompt, paste into your LLM, then send its reply back.`
-
-		panelController.showPanel(true)
-		panelController.pushState()
 
 		const responseText = await new Promise<string>((resolve, reject) => {
 			ManualModeHandler.pendingResolver = resolve
 			ManualModeHandler.pendingRejecter = reject
-			panelController.pushState()
+			ManualModeHandler.notifyStateChange()
 		})
 
 		const normalizedResponse = normalizeTalkToLlmLineEndings(responseText)

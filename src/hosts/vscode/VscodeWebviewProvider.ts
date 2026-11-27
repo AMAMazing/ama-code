@@ -1,6 +1,7 @@
 import { sendShowWebviewEvent } from "@core/controller/ui/subscribeToShowWebview"
 import { WebviewProvider } from "@core/webview"
 import * as vscode from "vscode"
+import { ManualModeHandler } from "@/core/api/providers/manual"
 import { handleGrpcRequest, handleGrpcRequestCancel } from "@/core/controller/grpc-handler"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
@@ -68,8 +69,13 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 		// and executes code based on the message that is received
 		this.setWebviewMessageListener(webviewView.webview)
 
-		// Logs show up in bottom panel > Debug Console
-		//Logger.log("registering listener")
+		// Push Manual Mode state updates directly to the sidebar webview
+		ManualModeHandler.setStateChangeListener((manualModeState) => {
+			void this.postMessageToWebview({
+				type: "manual_mode_state",
+				manualModeState,
+			})
+		})
 
 		// Listen for when the sidebar becomes visible
 		// https://github.com/microsoft/vscode-discussions/discussions/840
@@ -174,6 +180,21 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 				}
 				break
 			}
+			case "manual_get_state": {
+				await postMessageToWebview({
+					type: "manual_mode_state",
+					manualModeState: ManualModeHandler.getState(),
+				})
+				break
+			}
+			case "manual_copy_prompt": {
+				await ManualModeHandler.copyLatestPromptToClipboard()
+				break
+			}
+			case "manual_paste_response": {
+				await ManualModeHandler.pasteAndSubmitFromClipboard()
+				break
+			}
 			default: {
 				Logger.error("Received unhandled WebviewMessage type:", JSON.stringify(message))
 			}
@@ -191,6 +212,7 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 	}
 
 	override async dispose() {
+		ManualModeHandler.setStateChangeListener(null)
 		// WebviewView doesn't have a dispose method, it's managed by VSCode
 		// We just need to clean up our disposables
 		while (this.disposables.length) {
