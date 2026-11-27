@@ -22,6 +22,7 @@ import { vscodeHostBridgeClient } from "@/hosts/vscode/hostbridge/client/host-gr
 import { createStorageContext } from "@/shared/storage/storage-context"
 import { readTextFromClipboard, writeTextToClipboard } from "@/utils/env"
 import { initialize, tearDown } from "./common"
+import { ManualModeHandler } from "./core/api/providers/manual"
 import { addToCline } from "./core/controller/commands/addToCline"
 import { explainWithCline } from "./core/controller/commands/explainWithCline"
 import { fixWithCline } from "./core/controller/commands/fixWithCline"
@@ -524,6 +525,13 @@ ${ctx.cellJson || "{}"}
 		}),
 	)
 
+	// Register Manual Mode panel command
+	context.subscriptions.push(
+		vscode.commands.registerCommand("ama-code.openManualModePanel", () => {
+			ManualModeHandler.openPanel()
+		}),
+	)
+
 	// Listen for secrets changes (e.g., cross-window login/logout sync)
 	const unsubSecrets = storageContext.secrets.onDidChange((event) => {
 		if (event.key === "cline:clineAccountId") {
@@ -694,6 +702,9 @@ async function getBinaryLocation(name: string): Promise<string> {
 export async function deactivate() {
 	// Dispose Non-VSCode-specific services
 	tearDown()
+
+	// Dispose Manual Mode panel and optional local HTTP bridge
+	ManualModeHandler.disposeAll()
 
 	// VSCode-specific services
 	disposeVscodeCommentReviewController()

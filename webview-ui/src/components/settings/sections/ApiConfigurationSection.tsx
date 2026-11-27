@@ -5,7 +5,7 @@ import { useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import { TabButton } from "../../mcp/configuration/McpConfigurationView"
-import ApiOptions, { TALKTOLM_BASE_URL_MARKER } from "../ApiOptions"
+import ApiOptions, { MANUAL_MODE_BASE_URL_MARKER, TALKTOLM_BASE_URL_MARKER } from "../ApiOptions"
 import Section from "../Section"
 import { syncModeConfigurations } from "../utils/providerUtils"
 import { useApiConfigurationHandlers } from "../utils/useApiConfigurationHandlers"
@@ -21,12 +21,14 @@ const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiCo
 	const { handleFieldsChange } = useApiConfigurationHandlers()
 
 	const isTalkToLlm = apiConfiguration?.openAiBaseUrl === TALKTOLM_BASE_URL_MARKER
+	const isManualMode = apiConfiguration?.openAiBaseUrl === MANUAL_MODE_BASE_URL_MARKER
+	const hideSeparateModels = isTalkToLlm || isManualMode
 
 	return (
 		<div>
 			{renderSectionHeader?.("api-config")}
 			<Section>
-				{!isTalkToLlm && planActSeparateModelsSetting ? (
+				{!hideSeparateModels && planActSeparateModelsSetting ? (
 					<div className="rounded-md mb-5">
 						<div className="flex gap-px mb-[10px] -mt-2 border-0 border-b border-solid border-(--vscode-panel-border)">
 							<TabButton
@@ -59,7 +61,7 @@ const ApiConfigurationSection = ({ renderSectionHeader, initialModelTab }: ApiCo
 					<ApiOptions currentMode={mode} initialModelTab={initialModelTab} showModelOptions={true} />
 				)}
 
-				{!isTalkToLlm && (
+				{!hideSeparateModels && (
 					<div className="mb-[5px]">
 						<VSCodeCheckbox
 							checked={planActSeparateModelsSetting}
